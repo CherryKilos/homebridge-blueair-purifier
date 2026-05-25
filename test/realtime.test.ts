@@ -1,9 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
 import { collectSensorReadings, readingsToSensorData } from '../src/api/BlueAirSensorData';
-import { parseRealtimeMessage } from '../src/api/BlueAirRealtimeApi';
+import { parseRealtimeMessage, realtimeSubscriptionTopics } from '../src/api/BlueAirRealtimeApi';
 
 describe('Blueair realtime parser', () => {
+  it('subscribes only to stable realtime topics', () => {
+    expect(realtimeSubscriptionTopics(['<redacted-device-1>'])).toEqual([
+      'd/<redacted-device-1>/s/5s',
+      '$aws/things/<redacted-device-1>/shadow/update/documents',
+    ]);
+  });
+
   it('maps MQTT SenML t/h payloads into normalized sensor data', () => {
     const update = parseRealtimeMessage(
       'd/<redacted-device-1>/s/5s',
