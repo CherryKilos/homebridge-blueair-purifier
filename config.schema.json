@@ -34,6 +34,12 @@
         "description": "Account UUID for BlueAir account. This should be filled in automatically in the discovery process.",
         "type": "string"
       },
+      "autoExposeAvailableServices": {
+        "title": "Auto Expose Available Services",
+        "description": "Automatically create HomeKit services when a device payload shows support. Disable per device with Disabled Services.",
+        "type": "boolean",
+        "default": true
+      },
       "verboseLogging": {
         "title": "Verbose Logging",
         "description": "Enable to receive detailed log messages. Useful for troubleshooting.",
@@ -78,6 +84,34 @@
               "description": "Percentage of filter life remaining to trigger a filter change alert.",
               "type": "number"
             },
+            "temperatureInputUnit": {
+              "title": "Temperature Input Unit",
+              "description": "Unit used by Blueair for this device. Auto treats unusually high values as Fahrenheit and converts them to Celsius for HomeKit.",
+              "type": "string",
+              "enum": ["auto", "celsius", "fahrenheit"],
+              "default": "auto"
+            },
+            "fanSpeedMax": {
+              "title": "Fan Speed Max",
+              "description": "Raw maximum fan speed reported by the device. Leave 0 to infer from observed values.",
+              "type": "number",
+              "default": 0
+            },
+            "brightnessMax": {
+              "title": "Brightness Max",
+              "description": "Raw maximum LED brightness reported by the device. Leave 0 to infer from observed values.",
+              "type": "number",
+              "default": 0
+            },
+            "disabledServices": {
+              "title": "Disabled Services",
+              "description": "Services to suppress even when auto exposure detects support.",
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": ["led", "airQuality", "temperature", "humidity", "germShield", "nightMode"]
+              }
+            },
             "led": {
               "title": "LED",
               "description": "Toggles if the LED switch service is created with the accessory.",
@@ -91,6 +125,11 @@
             "temperatureSensor": {
               "title": "Temperature Sensor",
               "description": "Toggles if the temperature sensor service is created with the accessory.",
+              "type": "boolean"
+            },
+            "humiditySensor": {
+              "title": "Humidity Sensor",
+              "description": "Toggles if the humidity sensor service is created with the accessory.",
               "type": "boolean"
             },
             "germShield": {
@@ -117,7 +156,17 @@
           "expandable": true,
           "expanded": true,
           "title": "Common Settings",
-          "items": ["name", "username", "password", "region", "accountUuid", "verboseLogging", "uiDebug", "pollingInterval"]
+          "items": [
+            "name",
+            "username",
+            "password",
+            "region",
+            "accountUuid",
+            "autoExposeAvailableServices",
+            "verboseLogging",
+            "uiDebug",
+            "pollingInterval"
+          ]
         },
         {
           "key": "devices",
@@ -129,9 +178,14 @@
             "devices[].model",
             "devices[].serialNumber",
             "devices[].filterChangeLevel",
+            "devices[].temperatureInputUnit",
+            "devices[].fanSpeedMax",
+            "devices[].brightnessMax",
+            "devices[].disabledServices",
             "devices[].led",
             "devices[].airQualitySensor",
             "devices[].temperatureSensor",
+            "devices[].humiditySensor",
             "devices[].germShield",
             "devices[].nightMode"
           ]

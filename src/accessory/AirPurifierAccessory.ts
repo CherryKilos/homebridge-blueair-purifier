@@ -3,6 +3,15 @@ import { BlueAirPlatform } from '../platform';
 import { BlueAirDevice } from '../device/BlueAirDevice';
 import { DeviceConfig } from '../platformUtils';
 import { FullBlueAirDeviceState } from '../api/BlueAirAwsApi';
+import {
+  brightnessMaxForDevice,
+  fanSpeedMaxForDevice,
+  inferDeviceCapabilities,
+  percentToRaw,
+  rawToPercent,
+  shouldExposeService,
+  temperatureToCelsius,
+} from '../device/capabilities';
 
 export class AirPurifierAccessory {
   private service: Service;
@@ -10,6 +19,7 @@ export class AirPurifierAccessory {
   private ledService?: Service;
   private airQualityService?: Service;
   private temperatureService?: Service;
+  private humidityService?: Service;
   private germShieldService?: Service;
   private nightModeService?: Service;
 
@@ -24,6 +34,10 @@ export class AirPurifierAccessory {
       .setCharacteristic(this.platform.Characteristic.Manufacturer, 'BlueAir')
       .setCharacteristic(this.platform.Characteristic.Model, this.configDev.model || 'BlueAir Purifier')
       .setCharacteristic(this.platform.Characteristic.SerialNumber, this.configDev.serialNumber || 'BlueAir Device');
+
+    const capabilities = inferDeviceCapabilities(this.device.state, this.device.sensorData);
+    const autoExposeAvailableServices = this.platform.platformConfig.autoExposeAvailableServices;
+    const disabledServices = this.configDev.disabledServices ?? [];
 
     this.service =
       this.accessory.getService(this.platform.Service.AirPurifier) || this.accessory.addService(this.platform.Service.AirPurifier);
@@ -59,7 +73,7 @@ export class AirPurifierAccessory {
     this.filterMaintenanceService.getCharacteristic(this.platform.Characteristic.FilterLifeLevel).onGet(this.getFilterLifeLevel.bind(this));
 
     this.ledService = this.accessory.getServiceById(this.platform.Service.Lightbulb, 'Led');
-    if (this.configDev.led) {
+    if (shouldExposeService('led', this.configDev.led, capabilities.controls.brightness, autoExposeAvailableServices, disabledServices)) {
       this.ledService ??= this.accessory.addService(this.platform.Service.Lightbulb, `${this.device.name} Led`, 'Led');
       this.ledService.setCharacteristic(this.platform.Characteristic.Name, `${this.device.name} Led`);
       this.ledService.setCharacteristic(this.platform.Characteristic.ConfiguredName, `${this.device.name} Led`);
@@ -73,7 +87,15 @@ export class AirPurifierAccessory {
     }
 
     this.airQualityService = this.accessory.getServiceById(this.platform.Service.AirQualitySensor, 'AirQuality');
-    if (this.configDev.airQualitySensor) {
+    if (
+      shouldExposeService(
+        'airQuality',
+        this.configDev.airQualitySensor,
+        capabilities.sensors.airQuality,
+        autoExposeAvailableServices,
+        disabledServices,
+      )
+    ) {
       this.airQualityService ??= this.accessory.addService(
         this.platform.Service.AirQualitySensor,
         `${this.device.name} Air Quality`,
@@ -88,7 +110,15 @@ export class AirPurifierAccessory {
     }
 
     this.temperatureService = this.accessory.getServiceById(this.platform.Service.TemperatureSensor, 'Temperature');
-    if (this.configDev.temperatureSensor) {
+    if (
+      shouldExposeService(
+        'temperature',
+        this.configDev.temperatureSensor,
+        capabilities.sensors.temperature,
+        autoExposeAvailableServices,
+        disabledServices,
+      )
+    ) {
       this.temperatureService ??= this.accessory.addService(
         this.platform.Service.TemperatureSensor,
         `${this.device.name} Temperature`,
@@ -101,8 +131,34 @@ export class AirPurifierAccessory {
       this.accessory.removeService(this.temperatureService);
     }
 
+    this.humidityService = this.accessory.getServiceById(this.platform.Service.HumiditySensor, 'Humidity');
+    if (
+      shouldExposeService(
+        'humidity',
+        this.configDev.humiditySensor,
+        capabilities.sensors.humidity,
+        autoExposeAvailableServices,
+        disabledServices,
+      )
+    ) {
+      this.humidityService ??= this.accessory.addService(this.platform.Service.HumiditySensor, `${this.device.name} Humidity`, 'Humidity');
+      this.humidityService
+        .getCharacteristic(this.platform.Characteristic.CurrentRelativeHumidity)
+        .onGet(this.getCurrentRelativeHumidity.bind(this));
+    } else if (this.humidityService) {
+      this.accessory.removeService(this.humidityService);
+    }
+
     this.germShieldService = this.accessory.getServiceById(this.platform.Service.Switch, 'GermShield');
-    if (this.configDev.germShield) {
+    if (
+      shouldExposeService(
+        'germShield',
+        this.configDev.germShield,
+        capabilities.controls.germShield,
+        autoExposeAvailableServices,
+        disabledServices,
+      )
+    ) {
       this.germShieldService ??= this.accessory.addService(this.platform.Service.Switch, `${this.device.name} Germ Shield`, 'GermShield');
       this.germShieldService.setCharacteristic(this.platform.Characteristic.Name, `${this.device.name} Germ Shield`);
       this.germShieldService.setCharacteristic(this.platform.Characteristic.ConfiguredName, `${this.device.name} Germ Shield`);
@@ -115,7 +171,15 @@ export class AirPurifierAccessory {
     }
 
     this.nightModeService = this.accessory.getServiceById(this.platform.Service.Switch, 'NightMode');
-    if (this.configDev.nightMode) {
+    if (
+      shouldExposeService(
+        'nightMode',
+        this.configDev.nightMode,
+        capabilities.controls.nightMode,
+        autoExposeAvailableServices,
+        disabledServices,
+      )
+    ) {
       this.nightModeService ??= this.accessory.addService(this.platform.Service.Switch, `${this.device.name} Night Mode`, 'NightMode');
       this.nightModeService.setCharacteristic(this.platform.Characteristic.Name, `${this.device.name} Night Mode`);
       this.nightModeService.setCharacteristic(this.platform.Characteristic.ConfiguredName, `${this.device.name} Night Mode`);
@@ -132,7 +196,7 @@ export class AirPurifierAccessory {
 
   updateCharacteristics(changedStates: Partial<FullBlueAirDeviceState>) {
     for (const [k, v] of Object.entries(changedStates)) {
-      this.platform.log.debug(`[${this.device.name}] ${k} changed to ${v}}`);
+      this.platform.log.debug(`[${this.device.name}] ${k} changed to ${v}`);
       let updateState = false;
       let updateAirQuality = false;
       switch (k) {
@@ -151,17 +215,26 @@ export class AirPurifierAccessory {
           this.service.updateCharacteristic(this.platform.Characteristic.CurrentAirPurifierState, this.getCurrentAirPurifierState());
           break;
         case 'filterusage':
-          this.service.updateCharacteristic(this.platform.Characteristic.FilterChangeIndication, this.getFilterChangeIndication());
-          this.service.updateCharacteristic(this.platform.Characteristic.FilterLifeLevel, this.getFilterLifeLevel());
+          this.filterMaintenanceService?.updateCharacteristic(
+            this.platform.Characteristic.FilterChangeIndication,
+            this.getFilterChangeIndication(),
+          );
+          this.filterMaintenanceService?.updateCharacteristic(this.platform.Characteristic.FilterLifeLevel, this.getFilterLifeLevel());
           break;
         case 'temperature':
-          this.service.updateCharacteristic(this.platform.Characteristic.CurrentTemperature, this.getCurrentTemperature());
+          this.temperatureService?.updateCharacteristic(this.platform.Characteristic.CurrentTemperature, this.getCurrentTemperature());
+          break;
+        case 'humidity':
+          this.humidityService?.updateCharacteristic(
+            this.platform.Characteristic.CurrentRelativeHumidity,
+            this.getCurrentRelativeHumidity(),
+          );
           break;
         case 'brightness':
           this.ledService?.updateCharacteristic(this.platform.Characteristic.On, this.getLedOn());
           this.ledService?.updateCharacteristic(this.platform.Characteristic.Brightness, this.getLedBrightness());
           break;
-        case 'pm25':
+        case 'pm2_5':
           this.airQualityService?.updateCharacteristic(this.platform.Characteristic.PM2_5Density, this.getPM2_5Density());
           updateAirQuality = true;
           break;
@@ -239,12 +312,12 @@ export class AirPurifierAccessory {
   }
 
   getRotationSpeed(): CharacteristicValue {
-    return this.device.state.standby === false ? this.device.state.fanspeed || 0 : 0;
+    return this.device.state.standby === false ? rawToPercent(this.device.state.fanspeed, this.getFanSpeedMax()) : 0;
   }
 
   async setRotationSpeed(value: CharacteristicValue) {
     this.platform.log.debug(`[${this.device.name}] Setting rotation speed to ${value}`);
-    await this.device.setState('fanspeed', value as number);
+    await this.device.setState('fanspeed', percentToRaw(Number(value), this.getFanSpeedMax()));
   }
 
   getFilterChangeIndication(): CharacteristicValue {
@@ -258,7 +331,11 @@ export class AirPurifierAccessory {
   }
 
   getCurrentTemperature(): CharacteristicValue {
-    return this.device.sensorData.temperature || 0;
+    return temperatureToCelsius(this.device.sensorData.temperature, this.configDev.temperatureInputUnit);
+  }
+
+  getCurrentRelativeHumidity(): CharacteristicValue {
+    return this.device.sensorData.humidity || 0;
   }
 
   getLedOn(): CharacteristicValue {
@@ -271,12 +348,12 @@ export class AirPurifierAccessory {
   }
 
   getLedBrightness(): CharacteristicValue {
-    return this.device.state.brightness || 0;
+    return rawToPercent(this.device.state.brightness, this.getBrightnessMax());
   }
 
   async setLedBrightness(value: CharacteristicValue) {
     this.platform.log.debug(`[${this.device.name}] Setting LED brightness to ${value}`);
-    await this.device.setState('brightness', value as number);
+    await this.device.setState('brightness', percentToRaw(Number(value), this.getBrightnessMax()));
   }
 
   getPM2_5Density(): CharacteristicValue {
@@ -325,5 +402,13 @@ export class AirPurifierAccessory {
   async setNightMode(value: CharacteristicValue) {
     this.platform.log.debug(`[${this.device.name}] Setting night mode to ${value}`);
     await this.device.setState('nightmode', value as boolean);
+  }
+
+  private getFanSpeedMax(): number {
+    return fanSpeedMaxForDevice(this.configDev, this.device.getObservedFanSpeedMax());
+  }
+
+  private getBrightnessMax(): number {
+    return brightnessMaxForDevice(this.configDev, this.device.getObservedBrightnessMax());
   }
 }

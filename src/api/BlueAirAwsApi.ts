@@ -4,7 +4,7 @@ import GigyaApi from './GigyaApi';
 import { BLUEAIR_API_TIMEOUT, BlueAirDeviceStatusResponse, LOGIN_EXPIRATION, getAwsConfig } from './Consts';
 import { Mutex } from 'async-mutex';
 
-type BlueAirDeviceDiscovery = {
+export type BlueAirDeviceDiscovery = {
   mac: string;
   'mcu-firmware': string;
   name: string;
@@ -138,20 +138,7 @@ export default class BlueAirAwsApi {
   }
 
   async getDeviceStatus(accountUuid: string, uuids: string[]): Promise<BlueAirDeviceStatus[]> {
-    await this.checkTokenExpiration();
-
-    const body = {
-      deviceconfigquery: uuids.map((uuid) => ({ id: uuid, r: { r: ['sensors'] } })),
-      includestates: true,
-      eventsubscription: {
-        include: uuids.map((uuid) => ({ filter: { o: `= ${uuid}` } })),
-      },
-    };
-    const data = await this.apiCall<BlueAirDeviceStatusResponse>(`/${accountUuid}/r/initial`, body);
-
-    if (!data.deviceInfo) {
-      throw new Error('getDeviceStatus error: no deviceInfo in response');
-    }
+    const data = await this.getRawDeviceStatus(accountUuid, uuids);
 
     const deviceStatuses: BlueAirDeviceStatus[] = data.deviceInfo.map((device) => {
       return {
@@ -178,6 +165,25 @@ export default class BlueAirAwsApi {
     });
 
     return deviceStatuses;
+  }
+
+  async getRawDeviceStatus(accountUuid: string, uuids: string[]): Promise<BlueAirDeviceStatusResponse> {
+    await this.checkTokenExpiration();
+
+    const body = {
+      deviceconfigquery: uuids.map((uuid) => ({ id: uuid, r: { r: ['sensors'] } })),
+      includestates: true,
+      eventsubscription: {
+        include: uuids.map((uuid) => ({ filter: { o: `= ${uuid}` } })),
+      },
+    };
+    const data = await this.apiCall<BlueAirDeviceStatusResponse>(`/${accountUuid}/r/initial`, body);
+
+    if (!data.deviceInfo) {
+      throw new Error('getDeviceStatus error: no deviceInfo in response');
+    }
+
+    return data;
   }
 
   async setDeviceStatus(uuid: string, state: string, value: number | boolean): Promise<void> {

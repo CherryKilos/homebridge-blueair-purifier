@@ -1,7 +1,7 @@
 import { API, DynamicPlatformPlugin, Logger, PlatformAccessory, PlatformConfig, Service, Characteristic } from 'homebridge';
 
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
-import { Config, defaultConfig } from './platformUtils';
+import { Config, defaultConfig, defaultDeviceConfig } from './platformUtils';
 import { defaultsDeep } from 'lodash';
 import BlueAirAwsApi, { BlueAirDeviceStatus } from './api/BlueAirAwsApi';
 import { BlueAirDevice } from './device/BlueAirDevice';
@@ -15,7 +15,7 @@ export class BlueAirPlatform extends EventEmitter implements DynamicPlatformPlug
   // this is used to track restored cached accessories
   public readonly accessories: PlatformAccessory[] = [];
 
-  private readonly platformConfig: Config;
+  public readonly platformConfig: Config;
   private readonly blueAirApi: BlueAirAwsApi;
 
   private existingUuids: string[] = [];
@@ -33,6 +33,7 @@ export class BlueAirPlatform extends EventEmitter implements DynamicPlatformPlug
     this.Characteristic = api.hap.Characteristic;
 
     this.platformConfig = defaultsDeep(config, defaultConfig);
+    this.platformConfig.devices = this.platformConfig.devices.map((device) => defaultsDeep(device, defaultDeviceConfig));
     this.log.debug('Finished initializing platform:', this.platformConfig.name);
 
     if (!this.platformConfig.username || !this.platformConfig.password || !this.platformConfig.accountUuid) {

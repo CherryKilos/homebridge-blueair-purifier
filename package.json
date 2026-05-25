@@ -28,7 +28,9 @@
   },
   "main": "dist/index.js",
   "scripts": {
+    "capture:blueair": "ts-node scripts/capture-blueair.ts",
     "lint": "eslint . --cache --ext .ts",
+    "test": "vitest run",
     "watch": "npm run build && npm link && nodemon",
     "build": "rimraf ./dist && tsc",
     "prepublishOnly": "npm run lint && npm run build",
@@ -53,7 +55,8 @@
     "prettier": "^3.2.5",
     "rimraf": "^5.0.5",
     "ts-node": "^10.9.2",
-    "typescript": "^5.4.4"
+    "typescript": "^5.4.4",
+    "vitest": "^4.1.7"
   },
   "dependencies": {
     "@homebridge/plugin-ui-utils": "^1.0.3",

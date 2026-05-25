@@ -1,6 +1,9 @@
 # Ignore compiled code
 dist
 
+# Ignore local device diagnostics
+fixtures/personal/
+
 # ------------- Defaults ------------- #
 
 # Logs

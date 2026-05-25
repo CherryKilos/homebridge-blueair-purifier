@@ -65,6 +65,8 @@ export class BlueAirDevice extends EventEmitter {
   private currentChanges: PendingChanges;
 
   private last_brightness: number;
+  private observedFanSpeedMax: number;
+  private observedBrightnessMax: number;
 
   constructor(device: BlueAirDeviceStatus) {
     super();
@@ -85,6 +87,9 @@ export class BlueAirDevice extends EventEmitter {
     };
 
     this.last_brightness = this.state.brightness || 0;
+    this.observedFanSpeedMax = 0;
+    this.observedBrightnessMax = 0;
+    this.updateObservedMaxima(this.state, this.sensorData);
 
     this.on('update', this.updateState.bind(this));
   }
@@ -115,6 +120,7 @@ export class BlueAirDevice extends EventEmitter {
     if (this.hasChanges(changesToApply)) {
       this.state = { ...this.state, ...changesToApply.state };
       this.sensorData = { ...this.sensorData, ...changesToApply.sensorData };
+      this.updateObservedMaxima(changesToApply.state, changesToApply.sensorData);
       this.emit('stateUpdated', { ...changesToApply.state, ...changesToApply.sensorData });
     }
 
@@ -139,10 +145,6 @@ export class BlueAirDevice extends EventEmitter {
         release();
         if (success) {
           const newState: Partial<BlueAirDeviceState> = { [attribute]: value };
-          if (attribute === 'nightmode' && value === true) {
-            newState['fanspeed'] = 11;
-            newState['brightness'] = 0;
-          }
           await this.notifyStateUpdate(newState);
         }
         resolve();
@@ -170,22 +172,41 @@ export class BlueAirDevice extends EventEmitter {
     for (const [k, v] of Object.entries(newState.sensorData)) {
       if (this.sensorData[k] !== v) {
         changedSensorData[k] = v;
-        if (k === 'pm25' || k === 'pm10' || k === 'voc') {
-          changedSensorData.aqi = this.calculateAqi();
-        }
       }
+    }
+    if ('pm2_5' in changedSensorData || 'pm10' in changedSensorData || 'voc' in changedSensorData) {
+      changedSensorData.aqi = this.calculateAqi({ ...this.sensorData, ...changedSensorData });
     }
     await this.notifyStateUpdate(changedState, changedSensorData);
   }
 
-  private calculateAqi(): number | undefined {
-    if (this.sensorData.pm2_5 === undefined && this.sensorData.pm10 === undefined && this.sensorData.voc === undefined) {
+  public getObservedFanSpeedMax(): number {
+    return this.observedFanSpeedMax;
+  }
+
+  public getObservedBrightnessMax(): number {
+    return this.observedBrightnessMax;
+  }
+
+  private updateObservedMaxima(state: Partial<BlueAirDeviceState>, sensorData?: Partial<BlueAirSensorDataWithAqi>) {
+    const fanSpeed = typeof state.fanspeed === 'number' ? state.fanspeed : sensorData?.fanspeed;
+    if (typeof fanSpeed === 'number' && fanSpeed > this.observedFanSpeedMax) {
+      this.observedFanSpeedMax = fanSpeed;
+    }
+
+    if (typeof state.brightness === 'number' && state.brightness > this.observedBrightnessMax) {
+      this.observedBrightnessMax = state.brightness;
+    }
+  }
+
+  private calculateAqi(sensorData: BlueAirSensorDataWithAqi = this.sensorData): number | undefined {
+    if (sensorData.pm2_5 === undefined && sensorData.pm10 === undefined && sensorData.voc === undefined) {
       return undefined;
     }
 
-    const pm2_5 = Math.round((this.sensorData.pm2_5 || 0) * 10) / 10;
-    const pm10 = this.sensorData.pm10 || 0;
-    const voc = this.sensorData.voc || 0;
+    const pm2_5 = Math.round((sensorData.pm2_5 || 0) * 10) / 10;
+    const pm10 = sensorData.pm10 || 0;
+    const voc = sensorData.voc || 0;
 
     const aqi_pm2_5 = this.calculateAqiForSensor(pm2_5, 'PM2_5');
     const aqi_pm10 = this.calculateAqiForSensor(pm10, 'PM10');
