@@ -87,13 +87,14 @@ function temperatureToCelsius(value, inputUnit = 'auto') {
     if (value === undefined) {
         return 0;
     }
+    const normalizedValue = Math.abs(value) > 125 && Math.abs(value) <= 1250 ? value / 10 : value;
     if (inputUnit === 'celsius') {
-        return value;
+        return normalizedValue;
     }
-    if (inputUnit === 'fahrenheit' || value > 45) {
-        return Math.round((((value - 32) * 5) / 9) * 10) / 10;
+    if (inputUnit === 'fahrenheit' || normalizedValue > 45) {
+        return Math.round((((normalizedValue - 32) * 5) / 9) * 10) / 10;
     }
-    return value;
+    return normalizedValue;
 }
 exports.temperatureToCelsius = temperatureToCelsius;
 function fanSpeedMaxForDevice(config, observedMax) {

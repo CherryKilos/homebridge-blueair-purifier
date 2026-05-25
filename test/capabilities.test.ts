@@ -78,6 +78,11 @@ describe('temperatureToCelsius', () => {
     expect(temperatureToCelsius(68, 'fahrenheit')).toBe(20);
     expect(temperatureToCelsius(72, 'auto')).toBe(22.2);
   });
+
+  it('normalizes deci-degree sensor values before unit handling', () => {
+    expect(temperatureToCelsius(260, 'auto')).toBe(26);
+    expect(temperatureToCelsius(720, 'auto')).toBe(22.2);
+  });
 });
 
 describe('normalization helpers', () => {
@@ -119,6 +124,22 @@ describe('capability inference', () => {
   it('does not expose read-only sensor services when no payload value was detected', () => {
     expect(shouldExposeDetectedService('temperature', true, false, true)).toBe(false);
     expect(shouldExposeDetectedService('temperature', false, true, true)).toBe(true);
+  });
+
+  it('does not infer ambient temperature from ComfortPure heat setpoints', () => {
+    const capabilities = inferDeviceCapabilities(
+      {
+        ecoheattemp: 260,
+        fsp0: 37,
+        heattemp: 260,
+        standby: false,
+      },
+      {},
+    );
+
+    expect(capabilities.controls.fanSpeed).toBe(true);
+    expect(capabilities.sensors.temperature).toBe(false);
+    expect(capabilities.sensors.humidity).toBe(false);
   });
 });
 

@@ -15,10 +15,13 @@ export declare class BlueAirPlatform extends EventEmitter implements DynamicPlat
     private existingUuids;
     private devices;
     private polling;
+    private realtimeApi?;
     constructor(log: Logger, config: PlatformConfig, api: API);
     configureAccessory(accessory: PlatformAccessory): void;
     getValidDevicesStatus(): Promise<void>;
     getInitialDeviceStates(): Promise<void>;
+    startRealtimeSensors(): Promise<void>;
+    private handleRealtimeUpdate;
     addDevice(device: BlueAirDeviceStatus): Promise<void>;
 }
 //# sourceMappingURL=platform.d.ts.map

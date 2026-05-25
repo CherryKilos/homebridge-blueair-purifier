@@ -5,6 +5,8 @@ export type Config = {
     region: Region;
     accountUuid: string;
     autoExposeAvailableServices: boolean;
+    realtimeSensors: 'auto' | 'off';
+    sensorProbeEnabled: boolean;
     verboseLogging: boolean;
     uiDebug: boolean;
     pollingInterval: number;

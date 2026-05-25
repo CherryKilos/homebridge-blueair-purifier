@@ -5,6 +5,8 @@ export type Config = {
   region: Region;
   accountUuid: string;
   autoExposeAvailableServices: boolean;
+  realtimeSensors: 'auto' | 'off';
+  sensorProbeEnabled: boolean;
   verboseLogging: boolean;
   uiDebug: boolean;
   pollingInterval: number;
@@ -50,6 +52,8 @@ export const defaultConfig: Config = {
   accountUuid: '',
   region: Region.EU,
   autoExposeAvailableServices: true,
+  realtimeSensors: 'auto',
+  sensorProbeEnabled: false,
   pollingInterval: 15000,
   devices: [],
 };

@@ -6,14 +6,17 @@ const AWS_CONFIG = {
     [platformUtils_1.Region.US]: {
         restApiId: 'on1keymlmh',
         awsRegion: 'us-east-2',
+        mqttBroker: 'a3tpdpjvxk6yog-ats.iot.us-east-2.amazonaws.com',
     },
     [platformUtils_1.Region.EU]: {
         restApiId: 'hkgmr8v960',
         awsRegion: 'eu-west-1',
+        mqttBroker: 'a3tpdpjvxk6yog-ats.iot.eu-west-1.amazonaws.com',
     },
     [platformUtils_1.Region.CN]: {
         restApiId: 'ftbkyp79si',
         awsRegion: 'cn-north-1',
+        mqttBroker: 'a2du5f95w7oz2a.ats.iot.cn-north-1.amazonaws.com.cn',
     },
 };
 const GIGYA_CONFIG = {

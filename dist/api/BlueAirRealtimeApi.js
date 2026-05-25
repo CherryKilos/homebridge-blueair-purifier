@@ -1,0 +1,167 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.parseRealtimeMessage = void 0;
+const mqtt_1 = require("mqtt");
+const BlueAirSensorData_1 = require("./BlueAirSensorData");
+function parseJsonPayload(payload) {
+    try {
+        return JSON.parse(Buffer.isBuffer(payload) ? payload.toString('utf8') : payload);
+    }
+    catch (_a) {
+        return undefined;
+    }
+}
+function primitiveStateFromObject(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+        return {};
+    }
+    return Object.entries(value).reduce((state, [key, entry]) => {
+        if (typeof entry === 'number' || typeof entry === 'boolean' || typeof entry === 'string') {
+            state[key] = entry;
+        }
+        return state;
+    }, {});
+}
+function reportedShadowState(raw) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+        return {};
+    }
+    const document = raw;
+    const current = document.current;
+    const currentState = current === null || current === void 0 ? void 0 : current.state;
+    const currentReported = currentState === null || currentState === void 0 ? void 0 : currentState.reported;
+    if (currentReported) {
+        return primitiveStateFromObject(currentReported);
+    }
+    const state = document.state;
+    return primitiveStateFromObject(state === null || state === void 0 ? void 0 : state.reported);
+}
+function parseRealtimeMessage(topic, payload) {
+    const raw = parseJsonPayload(payload);
+    if (raw === undefined) {
+        return undefined;
+    }
+    const sensorTopicMatch = topic.match(/(?:^|\/)d\/([^/]+)\/s\/(?:1s|5s|5m|batch\/b5m)$/);
+    if (sensorTopicMatch) {
+        const readings = (0, BlueAirSensorData_1.collectSensorReadings)(raw);
+        const sensorData = (0, BlueAirSensorData_1.readingsToSensorData)(readings);
+        const state = (0, BlueAirSensorData_1.readingsToState)(readings);
+        if (!(0, BlueAirSensorData_1.hasSensorData)(sensorData) && Object.keys(state).length === 0) {
+            return undefined;
+        }
+        return {
+            deviceId: sensorTopicMatch[1],
+            sensorData,
+            state,
+            raw,
+        };
+    }
+    const shadowTopicMatch = topic.match(/^\$aws\/things\/([^/]+)\/shadow\/update\/documents$/);
+    if (shadowTopicMatch) {
+        const state = reportedShadowState(raw);
+        if (Object.keys(state).length === 0) {
+            return undefined;
+        }
+        return {
+            deviceId: shadowTopicMatch[1],
+            sensorData: {},
+            state,
+            raw,
+        };
+    }
+    return undefined;
+}
+exports.parseRealtimeMessage = parseRealtimeMessage;
+class BlueAirRealtimeApi {
+    constructor(auth, deviceIds, logger, onUpdate) {
+        this.auth = auth;
+        this.deviceIds = deviceIds;
+        this.logger = logger;
+        this.onUpdate = onUpdate;
+    }
+    start() {
+        if (this.client) {
+            return;
+        }
+        const options = {
+            clientId: `homebridge-blueair-${Date.now()}`,
+            clean: true,
+            connectTimeout: 30 * 1000,
+            keepalive: 60,
+            path: '/mqtt',
+            protocol: 'wss',
+            reconnectPeriod: 5000,
+            transformWsUrl: (url, opts) => {
+                var _a, _b;
+                const wsOptions = ((_a = opts.wsOptions) !== null && _a !== void 0 ? _a : {});
+                opts.wsOptions = {
+                    ...wsOptions,
+                    headers: {
+                        ...((_b = wsOptions.headers) !== null && _b !== void 0 ? _b : {}),
+                        'X-Amz-CustomAuthorizer-Name': this.auth.customAuthorizerName,
+                        'X-Amz-CustomAuthorizer-Signature': this.auth.customAuthorizerSignature,
+                        'X-Amz-CustomAuthorizer-Token': this.auth.customAuthorizerToken,
+                    },
+                };
+                return url;
+            },
+        };
+        this.client = (0, mqtt_1.connect)(`wss://${this.auth.broker}:443/mqtt`, options);
+        this.client.on('connect', () => {
+            this.logger.debug('Blueair realtime sensor stream connected');
+            this.subscribe();
+            this.startResubscribeTimer();
+        });
+        this.client.on('reconnect', () => this.logger.debug('Blueair realtime sensor stream reconnecting'));
+        this.client.on('error', (error) => this.logger.warn(`Blueair realtime sensor stream error: ${error.message}`));
+        this.client.on('close', () => this.logger.debug('Blueair realtime sensor stream closed'));
+        this.client.on('message', (topic, payload) => {
+            const update = parseRealtimeMessage(topic, payload);
+            if (update) {
+                this.onUpdate(update);
+            }
+        });
+    }
+    stop() {
+        if (this.resubscribeTimer) {
+            clearInterval(this.resubscribeTimer);
+            this.resubscribeTimer = undefined;
+        }
+        if (this.client) {
+            this.client.end(true);
+            this.client = undefined;
+        }
+    }
+    subscribe() {
+        var _a;
+        if (!((_a = this.client) === null || _a === void 0 ? void 0 : _a.connected)) {
+            return;
+        }
+        const topics = this.deviceIds.flatMap((deviceId) => [
+            `d/${deviceId}/s/1s`,
+            `d/${deviceId}/s/5s`,
+            `d/${deviceId}/s/5m`,
+            `$aws/rules/telemetry_ingest_rule/d/${deviceId}/s/batch/b5m`,
+            `$aws/things/${deviceId}/shadow/update/documents`,
+        ]);
+        if (this.auth.userId) {
+            topics.push(`c/${this.auth.userId}/s/event`);
+        }
+        this.client.subscribe(topics, { qos: 0 }, (error) => {
+            if (error) {
+                this.logger.warn(`Blueair realtime sensor subscription failed: ${error.message}`);
+            }
+            else {
+                this.logger.debug(`Blueair realtime sensor subscription active for ${this.deviceIds.length} device(s)`);
+            }
+        });
+    }
+    startResubscribeTimer() {
+        if (this.resubscribeTimer) {
+            return;
+        }
+        this.resubscribeTimer = setInterval(() => this.subscribe(), 15 * 60 * 1000);
+    }
+}
+exports.default = BlueAirRealtimeApi;
+//# sourceMappingURL=BlueAirRealtimeApi.js.map

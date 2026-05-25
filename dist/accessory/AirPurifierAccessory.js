@@ -81,6 +81,7 @@ class AirPurifierAccessory {
         }
         else if (this.airQualityService) {
             this.accessory.removeService(this.airQualityService);
+            this.airQualityService = undefined;
         }
         this.temperatureService = this.accessory.getServiceById(this.platform.Service.TemperatureSensor, 'Temperature');
         if ((0, capabilities_1.shouldExposeDetectedService)('temperature', this.configDev.temperatureSensor, capabilities.sensors.temperature, autoExposeAvailableServices, disabledServices)) {
@@ -91,6 +92,7 @@ class AirPurifierAccessory {
         }
         else if (this.temperatureService) {
             this.accessory.removeService(this.temperatureService);
+            this.temperatureService = undefined;
         }
         this.humidityService = this.accessory.getServiceById(this.platform.Service.HumiditySensor, 'Humidity');
         if ((0, capabilities_1.shouldExposeDetectedService)('humidity', this.configDev.humiditySensor, capabilities.sensors.humidity, autoExposeAvailableServices, disabledServices)) {
@@ -101,6 +103,7 @@ class AirPurifierAccessory {
         }
         else if (this.humidityService) {
             this.accessory.removeService(this.humidityService);
+            this.humidityService = undefined;
         }
         this.germShieldService = this.accessory.getServiceById(this.platform.Service.Switch, 'GermShield');
         if ((0, capabilities_1.shouldExposeService)('germShield', this.configDev.germShield, capabilities.controls.germShield, autoExposeAvailableServices, disabledServices)) {
@@ -161,9 +164,11 @@ class AirPurifierAccessory {
                     (_b = this.filterMaintenanceService) === null || _b === void 0 ? void 0 : _b.updateCharacteristic(this.platform.Characteristic.FilterLifeLevel, this.getFilterLifeLevel());
                     break;
                 case 'temperature':
+                    this.ensureTemperatureService();
                     (_c = this.temperatureService) === null || _c === void 0 ? void 0 : _c.updateCharacteristic(this.platform.Characteristic.CurrentTemperature, this.getCurrentTemperature());
                     break;
                 case 'humidity':
+                    this.ensureHumidityService();
                     (_d = this.humidityService) === null || _d === void 0 ? void 0 : _d.updateCharacteristic(this.platform.Characteristic.CurrentRelativeHumidity, this.getCurrentRelativeHumidity());
                     break;
                 case 'brightness':
@@ -171,14 +176,17 @@ class AirPurifierAccessory {
                     (_f = this.ledService) === null || _f === void 0 ? void 0 : _f.updateCharacteristic(this.platform.Characteristic.Brightness, this.getLedBrightness());
                     break;
                 case 'pm2_5':
+                    this.ensureAirQualityService();
                     (_g = this.airQualityService) === null || _g === void 0 ? void 0 : _g.updateCharacteristic(this.platform.Characteristic.PM2_5Density, this.getPM2_5Density());
                     updateAirQuality = true;
                     break;
                 case 'pm10':
+                    this.ensureAirQualityService();
                     (_h = this.airQualityService) === null || _h === void 0 ? void 0 : _h.updateCharacteristic(this.platform.Characteristic.PM10Density, this.getPM10Density());
                     updateAirQuality = true;
                     break;
                 case 'voc':
+                    this.ensureAirQualityService();
                     (_j = this.airQualityService) === null || _j === void 0 ? void 0 : _j.updateCharacteristic(this.platform.Characteristic.VOCDensity, this.getVOCDensity());
                     updateAirQuality = true;
                     break;
@@ -344,6 +352,47 @@ class AirPurifierAccessory {
     }
     getBrightnessMax() {
         return (0, capabilities_1.brightnessMaxForDevice)(this.configDev, this.device.getObservedBrightnessMax());
+    }
+    ensureAirQualityService() {
+        var _a;
+        if (this.airQualityService) {
+            return;
+        }
+        const capabilities = (0, capabilities_1.inferDeviceCapabilities)(this.device.state, this.device.sensorData);
+        if (!(0, capabilities_1.shouldExposeDetectedService)('airQuality', this.configDev.airQualitySensor, capabilities.sensors.airQuality, this.platform.platformConfig.autoExposeAvailableServices, (_a = this.configDev.disabledServices) !== null && _a !== void 0 ? _a : [])) {
+            return;
+        }
+        this.airQualityService = this.accessory.addService(this.platform.Service.AirQualitySensor, `${this.device.name} Air Quality`, 'AirQuality');
+        this.airQualityService.getCharacteristic(this.platform.Characteristic.AirQuality).onGet(this.getAirQuality.bind(this));
+        this.airQualityService.getCharacteristic(this.platform.Characteristic.PM2_5Density).onGet(this.getPM2_5Density.bind(this));
+        this.airQualityService.getCharacteristic(this.platform.Characteristic.PM10Density).onGet(this.getPM10Density.bind(this));
+        this.airQualityService.getCharacteristic(this.platform.Characteristic.VOCDensity).onGet(this.getVOCDensity.bind(this));
+    }
+    ensureTemperatureService() {
+        var _a;
+        if (this.temperatureService) {
+            return;
+        }
+        const capabilities = (0, capabilities_1.inferDeviceCapabilities)(this.device.state, this.device.sensorData);
+        if (!(0, capabilities_1.shouldExposeDetectedService)('temperature', this.configDev.temperatureSensor, capabilities.sensors.temperature, this.platform.platformConfig.autoExposeAvailableServices, (_a = this.configDev.disabledServices) !== null && _a !== void 0 ? _a : [])) {
+            return;
+        }
+        this.temperatureService = this.accessory.addService(this.platform.Service.TemperatureSensor, `${this.device.name} Temperature`, 'Temperature');
+        this.temperatureService.getCharacteristic(this.platform.Characteristic.CurrentTemperature).onGet(this.getCurrentTemperature.bind(this));
+    }
+    ensureHumidityService() {
+        var _a;
+        if (this.humidityService) {
+            return;
+        }
+        const capabilities = (0, capabilities_1.inferDeviceCapabilities)(this.device.state, this.device.sensorData);
+        if (!(0, capabilities_1.shouldExposeDetectedService)('humidity', this.configDev.humiditySensor, capabilities.sensors.humidity, this.platform.platformConfig.autoExposeAvailableServices, (_a = this.configDev.disabledServices) !== null && _a !== void 0 ? _a : [])) {
+            return;
+        }
+        this.humidityService = this.accessory.addService(this.platform.Service.HumiditySensor, `${this.device.name} Humidity`, 'Humidity');
+        this.humidityService
+            .getCharacteristic(this.platform.Characteristic.CurrentRelativeHumidity)
+            .onGet(this.getCurrentRelativeHumidity.bind(this));
     }
     removeCharacteristicIfPresent(service, characteristic) {
         if (service.testCharacteristic(characteristic)) {

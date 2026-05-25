@@ -18,6 +18,8 @@ exports.defaultConfig = {
     accountUuid: '',
     region: Region.EU,
     autoExposeAvailableServices: true,
+    realtimeSensors: 'auto',
+    sensorProbeEnabled: false,
     pollingInterval: 15000,
     devices: [],
 };

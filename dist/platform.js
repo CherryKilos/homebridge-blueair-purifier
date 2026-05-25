@@ -11,6 +11,7 @@ const BlueAirAwsApi_1 = __importDefault(require("./api/BlueAirAwsApi"));
 const BlueAirDevice_1 = require("./device/BlueAirDevice");
 const AirPurifierAccessory_1 = require("./accessory/AirPurifierAccessory");
 const events_1 = __importDefault(require("events"));
+const BlueAirRealtimeApi_1 = __importDefault(require("./api/BlueAirRealtimeApi"));
 class BlueAirPlatform extends events_1.default {
     constructor(log, config, api) {
         super();
@@ -34,7 +35,15 @@ class BlueAirPlatform extends events_1.default {
         this.blueAirApi = new BlueAirAwsApi_1.default(this.platformConfig.username, this.platformConfig.password, this.platformConfig.region, log);
         this.api.on('didFinishLaunching', async () => {
             await this.getInitialDeviceStates();
+            await this.startRealtimeSensors();
             this.getValidDevicesStatus();
+        });
+        this.api.on('shutdown', () => {
+            var _a;
+            if (this.polling) {
+                clearTimeout(this.polling);
+            }
+            (_a = this.realtimeApi) === null || _a === void 0 ? void 0 : _a.stop();
         });
     }
     configureAccessory(accessory) {
@@ -84,6 +93,35 @@ class BlueAirPlatform extends events_1.default {
         catch (error) {
             this.log.error('Error getting initial device states:', error);
         }
+    }
+    async startRealtimeSensors() {
+        if (this.platformConfig.realtimeSensors === 'off' || this.realtimeApi || this.devices.length === 0) {
+            return;
+        }
+        try {
+            const mqttAuth = await this.blueAirApi.getMqttAuth();
+            if (!mqttAuth) {
+                this.log.warn('Blueair realtime sensor credentials were not returned by the cloud API; continuing with REST polling only.');
+                return;
+            }
+            this.realtimeApi = new BlueAirRealtimeApi_1.default(mqttAuth, this.devices.map((device) => device.id), this.log, (update) => this.handleRealtimeUpdate(update));
+            this.realtimeApi.start();
+        }
+        catch (error) {
+            this.log.warn(`Unable to start Blueair realtime sensors: ${error instanceof Error ? error.message : error}`);
+        }
+    }
+    handleRealtimeUpdate(update) {
+        const blueAirDevice = this.devices.find((device) => device.id === update.deviceId);
+        if (!blueAirDevice) {
+            return;
+        }
+        blueAirDevice.emit('update', {
+            id: blueAirDevice.id,
+            name: blueAirDevice.name,
+            state: update.state,
+            sensorData: update.sensorData,
+        });
     }
     async addDevice(device) {
         const uuid = this.api.hap.uuid.generate(device.id);

@@ -1,0 +1,1 @@
+{"version":3,"file":"BlueAirMqttTypes.d.ts","sourceRoot":"","sources":["../../src/api/BlueAirMqttTypes.ts"],"names":[],"mappings":"AAAA,MAAM,MAAM,eAAe,GAAG;IAC5B,MAAM,EAAE,MAAM,CAAC;IACf,oBAAoB,EAAE,MAAM,CAAC;IAC7B,yBAAyB,EAAE,MAAM,CAAC;IAClC,qBAAqB,EAAE,MAAM,CAAC;IAC9B,MAAM,CAAC,EAAE,MAAM,CAAC;CACjB,CAAC"}

@@ -122,6 +122,7 @@ export class AirPurifierAccessory {
       this.airQualityService.getCharacteristic(this.platform.Characteristic.VOCDensity).onGet(this.getVOCDensity.bind(this));
     } else if (this.airQualityService) {
       this.accessory.removeService(this.airQualityService);
+      this.airQualityService = undefined;
     }
 
     this.temperatureService = this.accessory.getServiceById(this.platform.Service.TemperatureSensor, 'Temperature');
@@ -144,6 +145,7 @@ export class AirPurifierAccessory {
         .onGet(this.getCurrentTemperature.bind(this));
     } else if (this.temperatureService) {
       this.accessory.removeService(this.temperatureService);
+      this.temperatureService = undefined;
     }
 
     this.humidityService = this.accessory.getServiceById(this.platform.Service.HumiditySensor, 'Humidity');
@@ -162,6 +164,7 @@ export class AirPurifierAccessory {
         .onGet(this.getCurrentRelativeHumidity.bind(this));
     } else if (this.humidityService) {
       this.accessory.removeService(this.humidityService);
+      this.humidityService = undefined;
     }
 
     this.germShieldService = this.accessory.getServiceById(this.platform.Service.Switch, 'GermShield');
@@ -242,9 +245,11 @@ export class AirPurifierAccessory {
           this.filterMaintenanceService?.updateCharacteristic(this.platform.Characteristic.FilterLifeLevel, this.getFilterLifeLevel());
           break;
         case 'temperature':
+          this.ensureTemperatureService();
           this.temperatureService?.updateCharacteristic(this.platform.Characteristic.CurrentTemperature, this.getCurrentTemperature());
           break;
         case 'humidity':
+          this.ensureHumidityService();
           this.humidityService?.updateCharacteristic(
             this.platform.Characteristic.CurrentRelativeHumidity,
             this.getCurrentRelativeHumidity(),
@@ -255,14 +260,17 @@ export class AirPurifierAccessory {
           this.ledService?.updateCharacteristic(this.platform.Characteristic.Brightness, this.getLedBrightness());
           break;
         case 'pm2_5':
+          this.ensureAirQualityService();
           this.airQualityService?.updateCharacteristic(this.platform.Characteristic.PM2_5Density, this.getPM2_5Density());
           updateAirQuality = true;
           break;
         case 'pm10':
+          this.ensureAirQualityService();
           this.airQualityService?.updateCharacteristic(this.platform.Characteristic.PM10Density, this.getPM10Density());
           updateAirQuality = true;
           break;
         case 'voc':
+          this.ensureAirQualityService();
           this.airQualityService?.updateCharacteristic(this.platform.Characteristic.VOCDensity, this.getVOCDensity());
           updateAirQuality = true;
           break;
@@ -458,6 +466,85 @@ export class AirPurifierAccessory {
 
   private getBrightnessMax(): number {
     return brightnessMaxForDevice(this.configDev, this.device.getObservedBrightnessMax());
+  }
+
+  private ensureAirQualityService(): void {
+    if (this.airQualityService) {
+      return;
+    }
+
+    const capabilities = inferDeviceCapabilities(this.device.state, this.device.sensorData);
+    if (
+      !shouldExposeDetectedService(
+        'airQuality',
+        this.configDev.airQualitySensor,
+        capabilities.sensors.airQuality,
+        this.platform.platformConfig.autoExposeAvailableServices,
+        this.configDev.disabledServices ?? [],
+      )
+    ) {
+      return;
+    }
+
+    this.airQualityService = this.accessory.addService(
+      this.platform.Service.AirQualitySensor,
+      `${this.device.name} Air Quality`,
+      'AirQuality',
+    );
+    this.airQualityService.getCharacteristic(this.platform.Characteristic.AirQuality).onGet(this.getAirQuality.bind(this));
+    this.airQualityService.getCharacteristic(this.platform.Characteristic.PM2_5Density).onGet(this.getPM2_5Density.bind(this));
+    this.airQualityService.getCharacteristic(this.platform.Characteristic.PM10Density).onGet(this.getPM10Density.bind(this));
+    this.airQualityService.getCharacteristic(this.platform.Characteristic.VOCDensity).onGet(this.getVOCDensity.bind(this));
+  }
+
+  private ensureTemperatureService(): void {
+    if (this.temperatureService) {
+      return;
+    }
+
+    const capabilities = inferDeviceCapabilities(this.device.state, this.device.sensorData);
+    if (
+      !shouldExposeDetectedService(
+        'temperature',
+        this.configDev.temperatureSensor,
+        capabilities.sensors.temperature,
+        this.platform.platformConfig.autoExposeAvailableServices,
+        this.configDev.disabledServices ?? [],
+      )
+    ) {
+      return;
+    }
+
+    this.temperatureService = this.accessory.addService(
+      this.platform.Service.TemperatureSensor,
+      `${this.device.name} Temperature`,
+      'Temperature',
+    );
+    this.temperatureService.getCharacteristic(this.platform.Characteristic.CurrentTemperature).onGet(this.getCurrentTemperature.bind(this));
+  }
+
+  private ensureHumidityService(): void {
+    if (this.humidityService) {
+      return;
+    }
+
+    const capabilities = inferDeviceCapabilities(this.device.state, this.device.sensorData);
+    if (
+      !shouldExposeDetectedService(
+        'humidity',
+        this.configDev.humiditySensor,
+        capabilities.sensors.humidity,
+        this.platform.platformConfig.autoExposeAvailableServices,
+        this.configDev.disabledServices ?? [],
+      )
+    ) {
+      return;
+    }
+
+    this.humidityService = this.accessory.addService(this.platform.Service.HumiditySensor, `${this.device.name} Humidity`, 'Humidity');
+    this.humidityService
+      .getCharacteristic(this.platform.Characteristic.CurrentRelativeHumidity)
+      .onGet(this.getCurrentRelativeHumidity.bind(this));
   }
 
   private removeCharacteristicIfPresent(

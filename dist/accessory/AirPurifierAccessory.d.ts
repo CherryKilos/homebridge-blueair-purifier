@@ -50,6 +50,9 @@ export declare class AirPurifierAccessory {
     private getFanSpeedValue;
     private getFanSpeedAttribute;
     private getBrightnessMax;
+    private ensureAirQualityService;
+    private ensureTemperatureService;
+    private ensureHumidityService;
     private removeCharacteristicIfPresent;
 }
 //# sourceMappingURL=AirPurifierAccessory.d.ts.map

@@ -1,6 +1,7 @@
 import { Logger } from 'homebridge';
 import { Region } from '../platformUtils';
 import { BlueAirDeviceStatusResponse } from './Consts';
+import type { BlueAirMqttAuth } from './BlueAirMqttTypes';
 export type BlueAirDeviceDiscovery = {
     mac: string;
     'mcu-firmware': string;
@@ -46,7 +47,20 @@ export type BlueAirDeviceStatus = {
     state: BlueAirDeviceState;
     sensorData: BlueAirDeviceSensorData;
 };
-export declare const BlueAirDeviceSensorDataMap: Record<string, keyof BlueAirDeviceSensorData>;
+export type BlueAirHistoricalTelemetry = {
+    raw: unknown;
+    sensorData: BlueAirDeviceSensorData;
+    state: BlueAirDeviceState;
+};
+export type BlueAirSensorProbeResult = {
+    deviceId: string;
+    variant: string;
+    ok: boolean;
+    sensorData?: BlueAirDeviceSensorData;
+    state?: BlueAirDeviceState;
+    response?: unknown;
+    error?: string;
+};
 export default class BlueAirAwsApi {
     private readonly logger;
     private readonly gigyaApi;
@@ -54,6 +68,12 @@ export default class BlueAirAwsApi {
     private mutex;
     private accessToken;
     private blueAirApiUrl;
+    private mqttAuthName?;
+    private mqttAuthSignature?;
+    private mqttAuthToken?;
+    private userId?;
+    private historicalTelemetryCache;
+    private readonly awsConfig;
     constructor(username: string, password: string, region: Region, logger: Logger);
     login(): Promise<void>;
     checkTokenExpiration(): Promise<void>;
@@ -61,7 +81,12 @@ export default class BlueAirAwsApi {
     getDeviceStatus(accountUuid: string, uuids: string[]): Promise<BlueAirDeviceStatus[]>;
     getRawDeviceStatus(accountUuid: string, uuids: string[]): Promise<BlueAirDeviceStatusResponse>;
     setDeviceStatus(uuid: string, state: string, value: number | boolean): Promise<void>;
+    getMqttAuth(): Promise<BlueAirMqttAuth | undefined>;
+    getHistoricalTelemetry(deviceId: string, durationMs?: number): Promise<BlueAirHistoricalTelemetry | undefined>;
+    probeInitialSensorVariants(accountUuid: string, deviceId: string): Promise<BlueAirSensorProbeResult[]>;
+    private shouldFetchHistoricalTelemetry;
     private getAwsAccessToken;
+    private extractUserId;
     private apiCall;
 }
 //# sourceMappingURL=BlueAirAwsApi.d.ts.map

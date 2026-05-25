@@ -2,6 +2,7 @@ import { Region } from '../platformUtils';
 type AWSConfigValue = {
     restApiId: string;
     awsRegion: string;
+    mqttBroker: string;
 };
 type GigyaConfigValue = {
     gigyaRegion: string;
@@ -18,6 +19,7 @@ export type BlueAirDeviceStatusResponse = {
             di: {
                 name: string;
             };
+            ds?: Record<string, unknown>;
         };
         sensordata: {
             n: string;

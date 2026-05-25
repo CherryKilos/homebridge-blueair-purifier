@@ -7,8 +7,18 @@ const BlueAirAwsApi = require('../dist/api/BlueAirAwsApi.js').default;
 const { defaultConfig } = require('../dist/platformUtils.js');
 const { PLATFORM_NAME } = require('../dist/settings.js');
 
-const SENSITIVE_KEY_PATTERNS = [/authorization/i, /password/i, /secret/i, /session/i, /token/i, /^apiKey$/i, /^idtoken$/i, /^jwt$/i];
-const PSEUDONYM_KEY_PATTERNS = [/accountUuid/i, /^id$/i, /^mac$/i, /^uuid$/i];
+const SENSITIVE_KEY_PATTERNS = [
+  /authorization/i,
+  /password/i,
+  /secret/i,
+  /session/i,
+  /signature/i,
+  /token/i,
+  /^apiKey$/i,
+  /^idtoken$/i,
+  /^jwt$/i,
+];
+const PSEUDONYM_KEY_PATTERNS = [/accountUuid/i, /^id$/i, /^mac$/i, /^uuid$/i, /^userId$/i];
 const replacements = new Map();
 
 const logger = {
@@ -92,6 +102,26 @@ async function main() {
 
   const rawInitialState = accountUuid && uuids.length ? await api.getRawDeviceStatus(accountUuid, uuids) : undefined;
   const normalizedStatus = accountUuid && uuids.length ? await api.getDeviceStatus(accountUuid, uuids) : [];
+  const mqttAuth = await api.getMqttAuth();
+  const sensorProbeResults = [];
+
+  if (accountUuid) {
+    for (const uuid of uuids) {
+      const results = await api.probeInitialSensorVariants(accountUuid, uuid);
+      for (const result of results) {
+        const sensorKeys = Object.keys(result.sensorData || {});
+        const stateKeys = Object.keys(result.state || {});
+        console.info(
+          `[${uuid}] probe ${result.variant}: ${
+            result.ok
+              ? `sensor keys=${sensorKeys.join(',') || 'none'} state keys=${stateKeys.join(',') || 'none'}`
+              : `failed ${result.error}`
+          }`,
+        );
+      }
+      sensorProbeResults.push(...results);
+    }
+  }
 
   const capture = redact({
     capturedAt: new Date().toISOString(),
@@ -103,6 +133,8 @@ async function main() {
     registeredDevices,
     rawInitialState,
     normalizedStatus,
+    mqttAuth,
+    sensorProbeResults,
   });
 
   const outputDir = path.resolve(process.cwd(), 'fixtures', 'personal');
