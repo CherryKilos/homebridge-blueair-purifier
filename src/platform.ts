@@ -146,6 +146,9 @@ export class BlueAirPlatform extends EventEmitter implements DynamicPlatformPlug
     blueAirDevice.emit('update', {
       id: blueAirDevice.id,
       name: blueAirDevice.name,
+      controlState: update.state,
+      sensorState: update.sensorData,
+      deviceMetadata: blueAirDevice.deviceMetadata,
       state: update.state,
       sensorData: update.sensorData,
     });
@@ -174,8 +177,9 @@ export class BlueAirPlatform extends EventEmitter implements DynamicPlatformPlug
       try {
         await this.blueAirApi.setDeviceStatus(id, attribute, value);
         success = true;
+        this.log.info(`[${name}] Write succeeded: key=${attribute}, raw=${value}`);
       } catch (error) {
-        this.log.error(`[${name}] Error setting state: ${attribute} = ${value}`, error);
+        this.log.error(`[${name}] Write failed: key=${attribute}, raw=${value}`, error);
       } finally {
         blueAirDevice.emit('setStateDone', success);
         // Have to clear polling again to avoid conflicts

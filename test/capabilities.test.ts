@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 
 import { BlueAirDevice } from '../src/device/BlueAirDevice';
 import {
-  fanSpeedMaxForWritableState,
   inferDeviceCapabilities,
   percentToRaw,
   rawToPercent,
@@ -13,7 +12,20 @@ import {
   temperatureToCelsius,
 } from '../src/device/capabilities';
 import { FullBlueAirDeviceState } from '../src/api/BlueAirAwsApi';
-import { defaultDeviceConfig } from '../src/platformUtils';
+
+const testDeviceMetadata = {
+  adapterId: 'blue-pure-max' as const,
+  adapterName: 'Blue Pure Max',
+  fanSpeed: {
+    attribute: 'fanspeed' as const,
+    rawMax: 91,
+  },
+  brightnessMax: 100,
+  fieldSources: {},
+  rawSensorNames: [],
+  rawStateNames: [],
+  dataSourceNames: [],
+};
 
 const redactedFixtures = {
   comfortPureT10i: {
@@ -95,41 +107,6 @@ describe('normalization helpers', () => {
     expect(percentToRaw(1, 3)).toBe(1);
   });
 
-  it('keeps discrete fanspeed writes on the discrete scale when realtime fsp0 is observed', () => {
-    const max = fanSpeedMaxForWritableState(
-      {
-        ...defaultDeviceConfig,
-        fanSpeedMax: 0,
-      },
-      {
-        fanspeed: 2,
-        fsp0: 35,
-      },
-      'fanspeed',
-      35,
-    );
-
-    expect(max).toBe(3);
-    expect(percentToRaw(35, max)).toBe(1);
-  });
-
-  it('keeps fsp0 writes on the percent-like scale for ComfortPure', () => {
-    const max = fanSpeedMaxForWritableState(
-      {
-        ...defaultDeviceConfig,
-        fanSpeedMax: 0,
-      },
-      {
-        fsp0: 37,
-      },
-      'fsp0',
-      37,
-    );
-
-    expect(max).toBe(100);
-    expect(percentToRaw(35, max)).toBe(35);
-  });
-
   it('maps low-range brightness values to HomeKit percentages and back', () => {
     expect(resolveBrightnessMax(undefined, 4)).toBe(10);
     expect(rawToPercent(5, 10)).toBe(50);
@@ -185,6 +162,13 @@ describe('BlueAirDevice AQI updates', () => {
     const device = new BlueAirDevice({
       id: '<redacted-device-1>',
       name: 'Blueair Test',
+      controlState: redactedFixtures.bluePure211iMax.state,
+      sensorState: {
+        pm2_5: 1,
+        pm10: 1,
+        voc: 1,
+      },
+      deviceMetadata: testDeviceMetadata,
       state: redactedFixtures.bluePure211iMax.state,
       sensorData: {
         pm2_5: 1,
@@ -198,6 +182,13 @@ describe('BlueAirDevice AQI updates', () => {
     device.emit('update', {
       id: device.id,
       name: device.name,
+      controlState: redactedFixtures.bluePure211iMax.state,
+      sensorState: {
+        pm2_5: 40,
+        pm10: 1,
+        voc: 1,
+      },
+      deviceMetadata: testDeviceMetadata,
       state: redactedFixtures.bluePure211iMax.state,
       sensorData: {
         pm2_5: 40,

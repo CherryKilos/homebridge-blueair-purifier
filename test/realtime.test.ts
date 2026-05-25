@@ -26,11 +26,11 @@ describe('Blueair realtime parser', () => {
     expect(update?.sensorData.temperature).toBe(260);
     expect(update?.sensorData.humidity).toBe(43);
     expect(update?.sensorData.pm2_5).toBe(4);
-    expect(update?.sensorData.fanspeed).toBe(37);
-    expect(update?.state.fsp0).toBe(37);
+    expect(update?.sensorData.fanspeed).toBeUndefined();
+    expect(update?.state).toEqual({});
   });
 
-  it('maps shadow documents into state without treating heattemp as ambient temperature', () => {
+  it('ignores shadow documents that only contain control state and heat setpoints', () => {
     const update = parseRealtimeMessage(
       '$aws/things/<redacted-device-1>/shadow/update/documents',
       JSON.stringify({
@@ -46,12 +46,10 @@ describe('Blueair realtime parser', () => {
       }),
     );
 
-    expect(update?.state.fsp0).toBe(37);
-    expect(update?.state.heattemp).toBe(260);
-    expect(update?.sensorData.temperature).toBeUndefined();
+    expect(update).toBeUndefined();
   });
 
-  it('maps shadow sensor aliases without exposing raw sensor keys as state', () => {
+  it('maps shadow sensor aliases without emitting writable control state', () => {
     const update = parseRealtimeMessage(
       '$aws/things/<redacted-device-1>/shadow/update/documents',
       JSON.stringify({
@@ -68,7 +66,7 @@ describe('Blueair realtime parser', () => {
 
     expect(update?.sensorData.pm2_5).toBe(0);
     expect(update?.state.pm2_).toBeUndefined();
-    expect(update?.state.standby).toBe(false);
+    expect(update?.state.standby).toBeUndefined();
   });
 });
 

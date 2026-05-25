@@ -4,13 +4,8 @@ import GigyaApi from './GigyaApi';
 import { BLUEAIR_API_TIMEOUT, BlueAirDeviceStatusResponse, LOGIN_EXPIRATION, getAwsConfig } from './Consts';
 import { Mutex } from 'async-mutex';
 import type { BlueAirMqttAuth } from './BlueAirMqttTypes';
-import {
-  BlueAirDeviceSensorDataMap,
-  collectSensorReadings,
-  hasSensorData,
-  readingsToSensorData,
-  readingsToState,
-} from './BlueAirSensorData';
+import { collectSensorReadings, hasSensorData, readingsToSensorData } from './BlueAirSensorData';
+import { DeviceAdapterMetadata, normalizeRawDeviceInfo } from '../device/adapters';
 
 export type BlueAirDeviceDiscovery = {
   mac: string;
@@ -58,6 +53,13 @@ export type BlueAirDeviceSensorData = {
 export type BlueAirDeviceStatus = {
   id: string;
   name: string;
+  controlState: BlueAirDeviceState;
+  sensorState: BlueAirDeviceSensorData;
+  deviceMetadata: DeviceAdapterMetadata;
+  /**
+   * Legacy aliases kept for the existing accessory/device code while the plugin
+   * transitions to explicit control/sensor state.
+   */
   state: BlueAirDeviceState;
   sensorData: BlueAirDeviceSensorData;
 };
@@ -87,13 +89,14 @@ export type BlueAirSensorProbeResult = {
   ok: boolean;
   sensorData?: BlueAirDeviceSensorData;
   state?: BlueAirDeviceState;
+  fieldSources?: Record<string, string>;
   response?: unknown;
   error?: string;
 };
 
 const HISTORICAL_TELEMETRY_CACHE_MS = 60 * 1000;
 const HISTORICAL_TELEMETRY_DURATION_MS = 10 * 60 * 60 * 1000;
-const HISTORICAL_SENSOR_NAMES = ['pm1', 'pm2_5', 'pm10', 'tVOC', 'voc', 'hcho', 'h', 't', 'fsp0'];
+const HISTORICAL_SENSOR_NAMES = ['pm1', 'pm2_5', 'pm10', 'tVOC', 'voc', 'hcho', 'h', 't'];
 
 export default class BlueAirAwsApi {
   private readonly gigyaApi: GigyaApi;
@@ -174,49 +177,22 @@ export default class BlueAirAwsApi {
   async getDeviceStatus(accountUuid: string, uuids: string[]): Promise<BlueAirDeviceStatus[]> {
     const data = await this.getRawDeviceStatus(accountUuid, uuids);
 
-    const deviceStatuses: BlueAirDeviceStatus[] = data.deviceInfo.map((device) => {
-      const sensorData = device.sensordata.reduce((acc, sensor) => {
-        const key = BlueAirDeviceSensorDataMap[sensor.n];
-        if (key) {
-          acc[key] = sensor.v;
-        }
-        return acc;
-      }, {} as BlueAirDeviceSensorData);
-
-      return {
-        id: device.id,
-        name: device.configuration.di.name,
-        sensorData,
-        state: device.states.reduce((acc, state) => {
-          if (state.v !== undefined) {
-            acc[state.n] = state.v;
-          } else if (state.vb !== undefined) {
-            acc[state.n] = state.vb;
-          } else {
-            this.logger.warn(`getDeviceStatus: unknown state ${JSON.stringify(state)}`);
-          }
-          return acc;
-        }, {} as BlueAirDeviceState),
-      };
-    });
+    const deviceStatuses: BlueAirDeviceStatus[] = data.deviceInfo.map((device) => this.withLegacyAliases(normalizeRawDeviceInfo(device)));
 
     await Promise.all(
       deviceStatuses.map(async (deviceStatus, index) => {
-        if (!this.shouldFetchHistoricalTelemetry(data.deviceInfo[index], deviceStatus.sensorData)) {
+        if (!this.shouldFetchHistoricalTelemetry(data.deviceInfo[index], deviceStatus.sensorState)) {
           return;
         }
 
         try {
           const historicalTelemetry = await this.getHistoricalTelemetry(deviceStatus.id);
-          if (historicalTelemetry && (hasSensorData(historicalTelemetry.sensorData) || Object.keys(historicalTelemetry.state).length > 0)) {
-            deviceStatus.sensorData = {
-              ...historicalTelemetry.sensorData,
-              ...deviceStatus.sensorData,
+          if (historicalTelemetry && hasSensorData(historicalTelemetry.sensorData)) {
+            deviceStatus.sensorState = {
+              ...this.sensorStateOnly(historicalTelemetry.sensorData),
+              ...deviceStatus.sensorState,
             };
-            deviceStatus.state = {
-              ...historicalTelemetry.state,
-              ...deviceStatus.state,
-            };
+            deviceStatus.sensorData = deviceStatus.sensorState;
           }
         } catch (error) {
           this.logger.debug(
@@ -314,8 +290,8 @@ export default class BlueAirAwsApi {
     const readings = collectSensorReadings(raw);
     const telemetry = {
       raw,
-      sensorData: readingsToSensorData(readings),
-      state: readingsToState(readings),
+      sensorData: this.sensorStateOnly(readingsToSensorData(readings)),
+      state: {},
     };
 
     this.historicalTelemetryCache.set(deviceId, {
@@ -376,13 +352,15 @@ export default class BlueAirAwsApi {
     for (const variant of variants) {
       try {
         const response = await this.apiCall<unknown>(`/${accountUuid}/r/initial`, variant.body, 'POST', undefined, 0);
-        const readings = collectSensorReadings(response);
+        const deviceInfo = this.extractDeviceInfo(response, deviceId);
+        const normalized = deviceInfo ? normalizeRawDeviceInfo(deviceInfo) : undefined;
         results.push({
           deviceId,
           variant: variant.name,
           ok: true,
-          sensorData: readingsToSensorData(readings),
-          state: readingsToState(readings),
+          sensorData: normalized?.sensorState ?? {},
+          state: normalized?.controlState ?? {},
+          fieldSources: normalized?.deviceMetadata.fieldSources ?? {},
           response,
         });
       } catch (error) {
@@ -402,7 +380,7 @@ export default class BlueAirAwsApi {
         variant: 'historical-telemetry-5m',
         ok: true,
         sensorData: telemetry?.sensorData ?? {},
-        state: telemetry?.state ?? {},
+        state: {},
         response: telemetry?.raw,
       });
     } catch (error) {
@@ -434,6 +412,33 @@ export default class BlueAirAwsApi {
         (dataSources?.tVOC && sensorData.voc === undefined) ||
         (dataSources?.hcho && sensorData.hcho === undefined),
     );
+  }
+
+  private withLegacyAliases(status: Omit<BlueAirDeviceStatus, 'state' | 'sensorData'>): BlueAirDeviceStatus {
+    return {
+      ...status,
+      state: status.controlState,
+      sensorData: status.sensorState,
+    };
+  }
+
+  private sensorStateOnly(sensorData: BlueAirDeviceSensorData): BlueAirDeviceSensorData {
+    const readOnlySensorData = { ...sensorData };
+    delete readOnlySensorData.fanspeed;
+    return readOnlySensorData;
+  }
+
+  private extractDeviceInfo(response: unknown, deviceId: string): BlueAirDeviceStatusResponse['deviceInfo'][number] | undefined {
+    if (!response || typeof response !== 'object') {
+      return undefined;
+    }
+
+    const deviceInfo = (response as BlueAirDeviceStatusResponse).deviceInfo;
+    if (!Array.isArray(deviceInfo)) {
+      return undefined;
+    }
+
+    return deviceInfo.find((device) => device.id === deviceId);
   }
 
   private async getAwsAccessToken(jwt: string): Promise<{

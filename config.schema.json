@@ -45,7 +45,7 @@
         "description": "Use Blueair AWS IoT realtime sensor streams when REST polling does not include live sensor values.",
         "type": "string",
         "enum": ["auto", "off"],
-        "default": "auto"
+        "default": "off"
       },
       "sensorProbeEnabled": {
         "title": "Sensor Probe Enabled",

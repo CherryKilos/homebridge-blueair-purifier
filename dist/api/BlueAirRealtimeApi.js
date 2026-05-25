@@ -5,7 +5,6 @@ const mqtt_1 = require("mqtt");
 const BlueAirSensorData_1 = require("./BlueAirSensorData");
 const MAX_EMPTY_CLOSES = 4;
 const CLOSE_WINDOW_MS = 60 * 1000;
-const STATE_SENSOR_NAMES = new Set(['fanspeed', 'fsp0']);
 function parseJsonPayload(payload) {
     try {
         return JSON.parse(Buffer.isBuffer(payload) ? payload.toString('utf8') : payload);
@@ -13,34 +12,6 @@ function parseJsonPayload(payload) {
     catch (_a) {
         return undefined;
     }
-}
-function primitiveStateFromObject(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) {
-        return {};
-    }
-    return Object.entries(value).reduce((state, [key, entry]) => {
-        if (BlueAirSensorData_1.BlueAirDeviceSensorDataMap[key] && !STATE_SENSOR_NAMES.has(key)) {
-            return state;
-        }
-        if (typeof entry === 'number' || typeof entry === 'boolean' || typeof entry === 'string') {
-            state[key] = entry;
-        }
-        return state;
-    }, {});
-}
-function reportedShadowState(raw) {
-    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
-        return {};
-    }
-    const document = raw;
-    const current = document.current;
-    const currentState = current === null || current === void 0 ? void 0 : current.state;
-    const currentReported = currentState === null || currentState === void 0 ? void 0 : currentState.reported;
-    if (currentReported) {
-        return primitiveStateFromObject(currentReported);
-    }
-    const state = document.state;
-    return primitiveStateFromObject(state === null || state === void 0 ? void 0 : state.reported);
 }
 function parseRealtimeMessage(topic, payload) {
     const raw = parseJsonPayload(payload);
@@ -50,36 +21,39 @@ function parseRealtimeMessage(topic, payload) {
     const sensorTopicMatch = topic.match(/(?:^|\/)d\/([^/]+)\/s\/(?:1s|5s|5m|batch\/b5m)$/);
     if (sensorTopicMatch) {
         const readings = (0, BlueAirSensorData_1.collectSensorReadings)(raw);
-        const sensorData = (0, BlueAirSensorData_1.readingsToSensorData)(readings);
-        const state = (0, BlueAirSensorData_1.readingsToState)(readings);
-        if (!(0, BlueAirSensorData_1.hasSensorData)(sensorData) && Object.keys(state).length === 0) {
+        const sensorData = readOnlyRealtimeSensorData((0, BlueAirSensorData_1.readingsToSensorData)(readings));
+        if (!(0, BlueAirSensorData_1.hasSensorData)(sensorData)) {
             return undefined;
         }
         return {
             deviceId: sensorTopicMatch[1],
             sensorData,
-            state,
+            state: {},
             raw,
         };
     }
     const shadowTopicMatch = topic.match(/^\$aws\/things\/([^/]+)\/shadow\/update\/documents$/);
     if (shadowTopicMatch) {
         const readings = (0, BlueAirSensorData_1.collectSensorReadings)(raw);
-        const sensorData = (0, BlueAirSensorData_1.readingsToSensorData)(readings);
-        const state = reportedShadowState(raw);
-        if (!(0, BlueAirSensorData_1.hasSensorData)(sensorData) && Object.keys(state).length === 0) {
+        const sensorData = readOnlyRealtimeSensorData((0, BlueAirSensorData_1.readingsToSensorData)(readings));
+        if (!(0, BlueAirSensorData_1.hasSensorData)(sensorData)) {
             return undefined;
         }
         return {
             deviceId: shadowTopicMatch[1],
             sensorData,
-            state,
+            state: {},
             raw,
         };
     }
     return undefined;
 }
 exports.parseRealtimeMessage = parseRealtimeMessage;
+function readOnlyRealtimeSensorData(sensorData) {
+    const readOnlySensorData = { ...sensorData };
+    delete readOnlySensorData.fanspeed;
+    return readOnlySensorData;
+}
 function realtimeSubscriptionTopics(deviceIds) {
     return deviceIds.flatMap((deviceId) => [`d/${deviceId}/s/5s`, `$aws/things/${deviceId}/shadow/update/documents`]);
 }

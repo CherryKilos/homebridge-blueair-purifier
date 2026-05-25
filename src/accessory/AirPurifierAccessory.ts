@@ -5,7 +5,6 @@ import { DeviceConfig } from '../platformUtils';
 import { FullBlueAirDeviceState } from '../api/BlueAirAwsApi';
 import {
   brightnessMaxForDevice,
-  fanSpeedMaxForWritableState,
   inferDeviceCapabilities,
   percentToRaw,
   rawToPercent,
@@ -13,6 +12,7 @@ import {
   shouldExposeService,
   temperatureToCelsius,
 } from '../device/capabilities';
+import { FanSpeedWriteSpec, fanPercentToRaw, fanRawToPercent } from '../device/adapters';
 
 export class AirPurifierAccessory {
   private service: Service;
@@ -39,12 +39,12 @@ export class AirPurifierAccessory {
       .setCharacteristic(this.platform.Characteristic.Model, this.configDev.model || 'BlueAir Purifier')
       .setCharacteristic(this.platform.Characteristic.SerialNumber, this.configDev.serialNumber || 'BlueAir Device');
 
-    const capabilities = inferDeviceCapabilities(this.device.state, this.device.sensorData);
+    const capabilities = inferDeviceCapabilities(this.device.controlState, this.device.sensorState);
     const autoExposeAvailableServices = this.platform.platformConfig.autoExposeAvailableServices;
     const disabledServices = this.configDev.disabledServices ?? [];
     this.supportsAutoMode = capabilities.controls.autoMode;
     this.supportsChildLock = capabilities.controls.childLock;
-    this.supportsFanSpeed = capabilities.controls.fanSpeed;
+    this.supportsFanSpeed = Boolean(this.device.deviceMetadata.fanSpeed);
 
     this.service =
       this.accessory.getService(this.platform.Service.AirPurifier) || this.accessory.addService(this.platform.Service.AirPurifier);
@@ -301,7 +301,9 @@ export class AirPurifierAccessory {
   }
 
   getActive(): CharacteristicValue {
-    return this.device.state.standby === false ? this.platform.Characteristic.Active.ACTIVE : this.platform.Characteristic.Active.INACTIVE;
+    return this.device.controlState.standby === false
+      ? this.platform.Characteristic.Active.ACTIVE
+      : this.platform.Characteristic.Active.INACTIVE;
   }
 
   async setActive(value: CharacteristicValue) {
@@ -310,8 +312,8 @@ export class AirPurifierAccessory {
   }
 
   getCurrentAirPurifierState(): CharacteristicValue {
-    if (this.device.state.standby === false) {
-      return this.device.state.automode && this.getFanSpeedValue() === 0
+    if (this.device.controlState.standby === false) {
+      return this.device.controlState.automode && this.getFanSpeedValue() === 0
         ? this.platform.Characteristic.CurrentAirPurifierState.IDLE
         : this.platform.Characteristic.CurrentAirPurifierState.PURIFYING_AIR;
     }
@@ -320,7 +322,7 @@ export class AirPurifierAccessory {
   }
 
   getTargetAirPurifierState(): CharacteristicValue {
-    return this.device.state.automode
+    return this.device.controlState.automode
       ? this.platform.Characteristic.TargetAirPurifierState.AUTO
       : this.platform.Characteristic.TargetAirPurifierState.MANUAL;
   }
@@ -335,7 +337,7 @@ export class AirPurifierAccessory {
   }
 
   getLockPhysicalControls(): CharacteristicValue {
-    return this.device.state.childlock
+    return this.device.controlState.childlock
       ? this.platform.Characteristic.LockPhysicalControls.CONTROL_LOCK_ENABLED
       : this.platform.Characteristic.LockPhysicalControls.CONTROL_LOCK_DISABLED;
   }
@@ -350,38 +352,46 @@ export class AirPurifierAccessory {
   }
 
   getRotationSpeed(): CharacteristicValue {
-    return this.device.state.standby === false ? rawToPercent(this.getFanSpeedValue(), this.getFanSpeedMax()) : 0;
+    return this.device.controlState.standby === false ? fanRawToPercent(this.getFanSpeedValue(), this.getFanSpeedSpec()) : 0;
   }
 
   async setRotationSpeed(value: CharacteristicValue) {
-    this.platform.log.debug(`[${this.device.name}] Setting rotation speed to ${value}`);
     if (!this.supportsFanSpeed) {
       this.platform.log.warn(`[${this.device.name}] Ignoring fan speed change because this device did not report fanspeed support.`);
       return;
     }
-    await this.device.setState(this.getFanSpeedAttribute(), percentToRaw(Number(value), this.getFanSpeedMax()));
+
+    const spec = this.getFanSpeedSpec();
+    const attribute = spec.attribute;
+    const rawValue = fanPercentToRaw(Number(value), spec);
+    this.platform.log.info(`[${this.device.name}] Setting rotation speed: homekit=${value}, key=${attribute}, raw=${rawValue}`);
+    await this.device.setState(attribute, rawValue);
   }
 
   getFilterChangeIndication(): CharacteristicValue {
-    return this.device.state.filterusage !== undefined && this.device.state.filterusage >= this.configDev.filterChangeLevel
+    return this.device.controlState.filterusage !== undefined && this.device.controlState.filterusage >= this.configDev.filterChangeLevel
       ? this.platform.Characteristic.FilterChangeIndication.CHANGE_FILTER
       : this.platform.Characteristic.FilterChangeIndication.FILTER_OK;
   }
 
   getFilterLifeLevel(): CharacteristicValue {
-    return 100 - (this.device.state.filterusage || 0);
+    return 100 - (this.device.controlState.filterusage || 0);
   }
 
   getCurrentTemperature(): CharacteristicValue {
-    return temperatureToCelsius(this.device.sensorData.temperature, this.configDev.temperatureInputUnit);
+    return temperatureToCelsius(this.device.sensorState.temperature, this.configDev.temperatureInputUnit);
   }
 
   getCurrentRelativeHumidity(): CharacteristicValue {
-    return this.device.sensorData.humidity || 0;
+    return this.device.sensorState.humidity || 0;
   }
 
   getLedOn(): CharacteristicValue {
-    return this.device.state.brightness !== undefined && this.device.state.brightness > 0 && this.device.state.nightmode !== true;
+    return (
+      this.device.controlState.brightness !== undefined &&
+      this.device.controlState.brightness > 0 &&
+      this.device.controlState.nightmode !== true
+    );
   }
 
   async setLedOn(value: CharacteristicValue) {
@@ -390,7 +400,7 @@ export class AirPurifierAccessory {
   }
 
   getLedBrightness(): CharacteristicValue {
-    return rawToPercent(this.device.state.brightness, this.getBrightnessMax());
+    return rawToPercent(this.device.controlState.brightness, this.getBrightnessMax());
   }
 
   async setLedBrightness(value: CharacteristicValue) {
@@ -399,29 +409,29 @@ export class AirPurifierAccessory {
   }
 
   getPM2_5Density(): CharacteristicValue {
-    return this.device.sensorData.pm2_5 || 0;
+    return this.device.sensorState.pm2_5 || 0;
   }
 
   getPM10Density(): CharacteristicValue {
-    return this.device.sensorData.pm10 || 0;
+    return this.device.sensorState.pm10 || 0;
   }
 
   getVOCDensity(): CharacteristicValue {
-    return this.device.sensorData.voc || 0;
+    return this.device.sensorState.voc || 0;
   }
 
   getAirQuality(): CharacteristicValue {
-    if (this.device.sensorData.aqi === undefined) {
+    if (this.device.sensorState.aqi === undefined) {
       return this.platform.Characteristic.AirQuality.UNKNOWN;
     }
 
-    if (this.device.sensorData.aqi <= 50) {
+    if (this.device.sensorState.aqi <= 50) {
       return this.platform.Characteristic.AirQuality.EXCELLENT;
-    } else if (this.device.sensorData.aqi <= 100) {
+    } else if (this.device.sensorState.aqi <= 100) {
       return this.platform.Characteristic.AirQuality.GOOD;
-    } else if (this.device.sensorData.aqi <= 150) {
+    } else if (this.device.sensorState.aqi <= 150) {
       return this.platform.Characteristic.AirQuality.FAIR;
-    } else if (this.device.sensorData.aqi <= 200) {
+    } else if (this.device.sensorState.aqi <= 200) {
       return this.platform.Characteristic.AirQuality.INFERIOR;
     } else {
       return this.platform.Characteristic.AirQuality.POOR;
@@ -429,7 +439,7 @@ export class AirPurifierAccessory {
   }
 
   getGermShield(): CharacteristicValue {
-    return this.device.state.germshield === true;
+    return this.device.controlState.germshield === true;
   }
 
   async setGermShield(value: CharacteristicValue) {
@@ -438,7 +448,7 @@ export class AirPurifierAccessory {
   }
 
   getNightMode(): CharacteristicValue {
-    return this.device.state.nightmode === true;
+    return this.device.controlState.nightmode === true;
   }
 
   async setNightMode(value: CharacteristicValue) {
@@ -446,27 +456,35 @@ export class AirPurifierAccessory {
     await this.device.setState('nightmode', value as boolean);
   }
 
-  private getFanSpeedMax(): number {
-    return fanSpeedMaxForWritableState(
-      this.configDev,
-      this.device.state,
-      this.getFanSpeedAttribute(),
-      this.device.getObservedFanSpeedMax(),
+  private getFanSpeedSpec(): FanSpeedWriteSpec {
+    const attribute = this.getFanSpeedAttribute();
+    if (this.configDev.fanSpeedMax && this.configDev.fanSpeedMax > 0) {
+      return {
+        attribute,
+        rawMax: this.configDev.fanSpeedMax,
+      };
+    }
+
+    return (
+      this.device.deviceMetadata.fanSpeed ?? {
+        attribute,
+        rawMax: this.device.getObservedFanSpeedMax(),
+      }
     );
   }
 
   private getFanSpeedValue(): number | undefined {
-    const fanspeed = this.device.state.fanspeed;
+    const fanspeed = this.device.controlState.fanspeed;
     if (typeof fanspeed === 'number') {
       return fanspeed;
     }
 
-    const fsp0 = this.device.state.fsp0;
+    const fsp0 = this.device.controlState.fsp0;
     return typeof fsp0 === 'number' ? fsp0 : undefined;
   }
 
   private getFanSpeedAttribute(): 'fanspeed' | 'fsp0' {
-    return this.device.state.fanspeed !== undefined ? 'fanspeed' : 'fsp0';
+    return this.device.deviceMetadata.fanSpeed?.attribute ?? (this.device.controlState.fanspeed !== undefined ? 'fanspeed' : 'fsp0');
   }
 
   private getBrightnessMax(): number {
@@ -478,7 +496,7 @@ export class AirPurifierAccessory {
       return;
     }
 
-    const capabilities = inferDeviceCapabilities(this.device.state, this.device.sensorData);
+    const capabilities = inferDeviceCapabilities(this.device.controlState, this.device.sensorState);
     if (
       !shouldExposeDetectedService(
         'airQuality',
@@ -507,7 +525,7 @@ export class AirPurifierAccessory {
       return;
     }
 
-    const capabilities = inferDeviceCapabilities(this.device.state, this.device.sensorData);
+    const capabilities = inferDeviceCapabilities(this.device.controlState, this.device.sensorState);
     if (
       !shouldExposeDetectedService(
         'temperature',
@@ -533,7 +551,7 @@ export class AirPurifierAccessory {
       return;
     }
 
-    const capabilities = inferDeviceCapabilities(this.device.state, this.device.sensorData);
+    const capabilities = inferDeviceCapabilities(this.device.controlState, this.device.sensorState);
     if (
       !shouldExposeDetectedService(
         'humidity',

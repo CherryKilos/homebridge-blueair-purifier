@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AirPurifierAccessory = void 0;
 const capabilities_1 = require("../device/capabilities");
+const adapters_1 = require("../device/adapters");
 class AirPurifierAccessory {
     constructor(platform, accessory, device, configDev) {
         var _a, _b, _c, _d, _e, _f, _g;
@@ -17,12 +18,12 @@ class AirPurifierAccessory {
             .setCharacteristic(this.platform.Characteristic.Manufacturer, 'BlueAir')
             .setCharacteristic(this.platform.Characteristic.Model, this.configDev.model || 'BlueAir Purifier')
             .setCharacteristic(this.platform.Characteristic.SerialNumber, this.configDev.serialNumber || 'BlueAir Device');
-        const capabilities = (0, capabilities_1.inferDeviceCapabilities)(this.device.state, this.device.sensorData);
+        const capabilities = (0, capabilities_1.inferDeviceCapabilities)(this.device.controlState, this.device.sensorState);
         const autoExposeAvailableServices = this.platform.platformConfig.autoExposeAvailableServices;
         const disabledServices = (_a = this.configDev.disabledServices) !== null && _a !== void 0 ? _a : [];
         this.supportsAutoMode = capabilities.controls.autoMode;
         this.supportsChildLock = capabilities.controls.childLock;
-        this.supportsFanSpeed = capabilities.controls.fanSpeed;
+        this.supportsFanSpeed = Boolean(this.device.deviceMetadata.fanSpeed);
         this.service =
             this.accessory.getService(this.platform.Service.AirPurifier) || this.accessory.addService(this.platform.Service.AirPurifier);
         this.service.setCharacteristic(this.platform.Characteristic.Name, this.configDev.name);
@@ -214,22 +215,24 @@ class AirPurifierAccessory {
         }
     }
     getActive() {
-        return this.device.state.standby === false ? this.platform.Characteristic.Active.ACTIVE : this.platform.Characteristic.Active.INACTIVE;
+        return this.device.controlState.standby === false
+            ? this.platform.Characteristic.Active.ACTIVE
+            : this.platform.Characteristic.Active.INACTIVE;
     }
     async setActive(value) {
         this.platform.log.debug(`[${this.device.name}] Setting active to ${value}`);
         await this.device.setState('standby', value === this.platform.Characteristic.Active.INACTIVE);
     }
     getCurrentAirPurifierState() {
-        if (this.device.state.standby === false) {
-            return this.device.state.automode && this.getFanSpeedValue() === 0
+        if (this.device.controlState.standby === false) {
+            return this.device.controlState.automode && this.getFanSpeedValue() === 0
                 ? this.platform.Characteristic.CurrentAirPurifierState.IDLE
                 : this.platform.Characteristic.CurrentAirPurifierState.PURIFYING_AIR;
         }
         return this.platform.Characteristic.CurrentAirPurifierState.INACTIVE;
     }
     getTargetAirPurifierState() {
-        return this.device.state.automode
+        return this.device.controlState.automode
             ? this.platform.Characteristic.TargetAirPurifierState.AUTO
             : this.platform.Characteristic.TargetAirPurifierState.MANUAL;
     }
@@ -242,7 +245,7 @@ class AirPurifierAccessory {
         await this.device.setState('automode', value === this.platform.Characteristic.TargetAirPurifierState.AUTO);
     }
     getLockPhysicalControls() {
-        return this.device.state.childlock
+        return this.device.controlState.childlock
             ? this.platform.Characteristic.LockPhysicalControls.CONTROL_LOCK_ENABLED
             : this.platform.Characteristic.LockPhysicalControls.CONTROL_LOCK_DISABLED;
     }
@@ -255,67 +258,72 @@ class AirPurifierAccessory {
         await this.device.setState('childlock', value === this.platform.Characteristic.LockPhysicalControls.CONTROL_LOCK_ENABLED);
     }
     getRotationSpeed() {
-        return this.device.state.standby === false ? (0, capabilities_1.rawToPercent)(this.getFanSpeedValue(), this.getFanSpeedMax()) : 0;
+        return this.device.controlState.standby === false ? (0, adapters_1.fanRawToPercent)(this.getFanSpeedValue(), this.getFanSpeedSpec()) : 0;
     }
     async setRotationSpeed(value) {
-        this.platform.log.debug(`[${this.device.name}] Setting rotation speed to ${value}`);
         if (!this.supportsFanSpeed) {
             this.platform.log.warn(`[${this.device.name}] Ignoring fan speed change because this device did not report fanspeed support.`);
             return;
         }
-        await this.device.setState(this.getFanSpeedAttribute(), (0, capabilities_1.percentToRaw)(Number(value), this.getFanSpeedMax()));
+        const spec = this.getFanSpeedSpec();
+        const attribute = spec.attribute;
+        const rawValue = (0, adapters_1.fanPercentToRaw)(Number(value), spec);
+        this.platform.log.info(`[${this.device.name}] Setting rotation speed: homekit=${value}, key=${attribute}, raw=${rawValue}`);
+        await this.device.setState(attribute, rawValue);
     }
     getFilterChangeIndication() {
-        return this.device.state.filterusage !== undefined && this.device.state.filterusage >= this.configDev.filterChangeLevel
+        return this.device.controlState.filterusage !== undefined && this.device.controlState.filterusage >= this.configDev.filterChangeLevel
             ? this.platform.Characteristic.FilterChangeIndication.CHANGE_FILTER
             : this.platform.Characteristic.FilterChangeIndication.FILTER_OK;
     }
     getFilterLifeLevel() {
-        return 100 - (this.device.state.filterusage || 0);
+        return 100 - (this.device.controlState.filterusage || 0);
     }
     getCurrentTemperature() {
-        return (0, capabilities_1.temperatureToCelsius)(this.device.sensorData.temperature, this.configDev.temperatureInputUnit);
+        return (0, capabilities_1.temperatureToCelsius)(this.device.sensorState.temperature, this.configDev.temperatureInputUnit);
     }
     getCurrentRelativeHumidity() {
-        return this.device.sensorData.humidity || 0;
+        return this.device.sensorState.humidity || 0;
     }
     getLedOn() {
-        return this.device.state.brightness !== undefined && this.device.state.brightness > 0 && this.device.state.nightmode !== true;
+        return (this.device.controlState.brightness !== undefined &&
+            this.device.controlState.brightness > 0 &&
+            this.device.controlState.nightmode !== true);
     }
     async setLedOn(value) {
         this.platform.log.debug(`[${this.device.name}] Setting LED on to ${value}`);
         await this.device.setLedOn(value);
     }
     getLedBrightness() {
-        return (0, capabilities_1.rawToPercent)(this.device.state.brightness, this.getBrightnessMax());
+        return (0, capabilities_1.rawToPercent)(this.device.controlState.brightness, this.getBrightnessMax());
     }
     async setLedBrightness(value) {
         this.platform.log.debug(`[${this.device.name}] Setting LED brightness to ${value}`);
         await this.device.setState('brightness', (0, capabilities_1.percentToRaw)(Number(value), this.getBrightnessMax()));
     }
     getPM2_5Density() {
-        return this.device.sensorData.pm2_5 || 0;
+        return this.device.sensorState.pm2_5 || 0;
     }
     getPM10Density() {
-        return this.device.sensorData.pm10 || 0;
+        return this.device.sensorState.pm10 || 0;
     }
     getVOCDensity() {
-        return this.device.sensorData.voc || 0;
+        return this.device.sensorState.voc || 0;
     }
     getAirQuality() {
-        if (this.device.sensorData.aqi === undefined) {
+        if (this.device.sensorState.aqi === undefined) {
             return this.platform.Characteristic.AirQuality.UNKNOWN;
         }
-        if (this.device.sensorData.aqi <= 50) {
+        if (this.device.sensorState.aqi <= 50) {
             return this.platform.Characteristic.AirQuality.EXCELLENT;
         }
-        else if (this.device.sensorData.aqi <= 100) {
+        else if (this.device.sensorState.aqi <= 100) {
             return this.platform.Characteristic.AirQuality.GOOD;
         }
-        else if (this.device.sensorData.aqi <= 150) {
+        else if (this.device.sensorState.aqi <= 150) {
             return this.platform.Characteristic.AirQuality.FAIR;
         }
-        else if (this.device.sensorData.aqi <= 200) {
+        else if (this.device.sensorState.aqi <= 200) {
             return this.platform.Characteristic.AirQuality.INFERIOR;
         }
         else {
@@ -323,32 +331,44 @@ class AirPurifierAccessory {
         }
     }
     getGermShield() {
-        return this.device.state.germshield === true;
+        return this.device.controlState.germshield === true;
     }
     async setGermShield(value) {
         this.platform.log.debug(`[${this.device.name}] Setting germ shield to ${value}`);
         await this.device.setState('germshield', value);
     }
     getNightMode() {
-        return this.device.state.nightmode === true;
+        return this.device.controlState.nightmode === true;
     }
     async setNightMode(value) {
         this.platform.log.debug(`[${this.device.name}] Setting night mode to ${value}`);
         await this.device.setState('nightmode', value);
     }
-    getFanSpeedMax() {
-        return (0, capabilities_1.fanSpeedMaxForWritableState)(this.configDev, this.device.state, this.getFanSpeedAttribute(), this.device.getObservedFanSpeedMax());
+    getFanSpeedSpec() {
+        var _a;
+        const attribute = this.getFanSpeedAttribute();
+        if (this.configDev.fanSpeedMax && this.configDev.fanSpeedMax > 0) {
+            return {
+                attribute,
+                rawMax: this.configDev.fanSpeedMax,
+            };
+        }
+        return ((_a = this.device.deviceMetadata.fanSpeed) !== null && _a !== void 0 ? _a : {
+            attribute,
+            rawMax: this.device.getObservedFanSpeedMax(),
+        });
     }
     getFanSpeedValue() {
-        const fanspeed = this.device.state.fanspeed;
+        const fanspeed = this.device.controlState.fanspeed;
         if (typeof fanspeed === 'number') {
             return fanspeed;
         }
-        const fsp0 = this.device.state.fsp0;
+        const fsp0 = this.device.controlState.fsp0;
         return typeof fsp0 === 'number' ? fsp0 : undefined;
     }
     getFanSpeedAttribute() {
-        return this.device.state.fanspeed !== undefined ? 'fanspeed' : 'fsp0';
+        var _a, _b;
+        return (_b = (_a = this.device.deviceMetadata.fanSpeed) === null || _a === void 0 ? void 0 : _a.attribute) !== null && _b !== void 0 ? _b : (this.device.controlState.fanspeed !== undefined ? 'fanspeed' : 'fsp0');
     }
     getBrightnessMax() {
         return (0, capabilities_1.brightnessMaxForDevice)(this.configDev, this.device.getObservedBrightnessMax());
@@ -358,7 +378,7 @@ class AirPurifierAccessory {
         if (this.airQualityService) {
             return;
         }
-        const capabilities = (0, capabilities_1.inferDeviceCapabilities)(this.device.state, this.device.sensorData);
+        const capabilities = (0, capabilities_1.inferDeviceCapabilities)(this.device.controlState, this.device.sensorState);
         if (!(0, capabilities_1.shouldExposeDetectedService)('airQuality', this.configDev.airQualitySensor, capabilities.sensors.airQuality, this.platform.platformConfig.autoExposeAvailableServices, (_a = this.configDev.disabledServices) !== null && _a !== void 0 ? _a : [])) {
             return;
         }
@@ -373,7 +393,7 @@ class AirPurifierAccessory {
         if (this.temperatureService) {
             return;
         }
-        const capabilities = (0, capabilities_1.inferDeviceCapabilities)(this.device.state, this.device.sensorData);
+        const capabilities = (0, capabilities_1.inferDeviceCapabilities)(this.device.controlState, this.device.sensorState);
         if (!(0, capabilities_1.shouldExposeDetectedService)('temperature', this.configDev.temperatureSensor, capabilities.sensors.temperature, this.platform.platformConfig.autoExposeAvailableServices, (_a = this.configDev.disabledServices) !== null && _a !== void 0 ? _a : [])) {
             return;
         }
@@ -385,7 +405,7 @@ class AirPurifierAccessory {
         if (this.humidityService) {
             return;
         }
-        const capabilities = (0, capabilities_1.inferDeviceCapabilities)(this.device.state, this.device.sensorData);
+        const capabilities = (0, capabilities_1.inferDeviceCapabilities)(this.device.controlState, this.device.sensorState);
         if (!(0, capabilities_1.shouldExposeDetectedService)('humidity', this.configDev.humiditySensor, capabilities.sensors.humidity, this.platform.platformConfig.autoExposeAvailableServices, (_a = this.configDev.disabledServices) !== null && _a !== void 0 ? _a : [])) {
             return;
         }

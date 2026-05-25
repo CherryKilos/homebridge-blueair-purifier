@@ -4,13 +4,7 @@ import type { IClientOptions, MqttClient } from 'mqtt';
 
 import type { BlueAirDeviceSensorData, BlueAirDeviceState } from './BlueAirAwsApi';
 import type { BlueAirMqttAuth } from './BlueAirMqttTypes';
-import {
-  BlueAirDeviceSensorDataMap,
-  collectSensorReadings,
-  hasSensorData,
-  readingsToSensorData,
-  readingsToState,
-} from './BlueAirSensorData';
+import { collectSensorReadings, hasSensorData, readingsToSensorData } from './BlueAirSensorData';
 
 export type BlueAirRealtimeUpdate = {
   deviceId: string;
@@ -21,7 +15,6 @@ export type BlueAirRealtimeUpdate = {
 
 const MAX_EMPTY_CLOSES = 4;
 const CLOSE_WINDOW_MS = 60 * 1000;
-const STATE_SENSOR_NAMES = new Set(['fanspeed', 'fsp0']);
 
 type WebsocketOptionsWithHeaders = {
   headers?: Record<string, string>;
@@ -36,40 +29,6 @@ function parseJsonPayload(payload: Buffer | string): unknown | undefined {
   }
 }
 
-function primitiveStateFromObject(value: unknown): BlueAirDeviceState {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    return {};
-  }
-
-  return Object.entries(value).reduce((state, [key, entry]) => {
-    if (BlueAirDeviceSensorDataMap[key] && !STATE_SENSOR_NAMES.has(key)) {
-      return state;
-    }
-
-    if (typeof entry === 'number' || typeof entry === 'boolean' || typeof entry === 'string') {
-      state[key] = entry;
-    }
-    return state;
-  }, {} as BlueAirDeviceState);
-}
-
-function reportedShadowState(raw: unknown): BlueAirDeviceState {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
-    return {};
-  }
-
-  const document = raw as Record<string, unknown>;
-  const current = document.current as Record<string, unknown> | undefined;
-  const currentState = current?.state as Record<string, unknown> | undefined;
-  const currentReported = currentState?.reported;
-  if (currentReported) {
-    return primitiveStateFromObject(currentReported);
-  }
-
-  const state = document.state as Record<string, unknown> | undefined;
-  return primitiveStateFromObject(state?.reported);
-}
-
 export function parseRealtimeMessage(topic: string, payload: Buffer | string): BlueAirRealtimeUpdate | undefined {
   const raw = parseJsonPayload(payload);
   if (raw === undefined) {
@@ -79,17 +38,16 @@ export function parseRealtimeMessage(topic: string, payload: Buffer | string): B
   const sensorTopicMatch = topic.match(/(?:^|\/)d\/([^/]+)\/s\/(?:1s|5s|5m|batch\/b5m)$/);
   if (sensorTopicMatch) {
     const readings = collectSensorReadings(raw);
-    const sensorData = readingsToSensorData(readings);
-    const state = readingsToState(readings);
+    const sensorData = readOnlyRealtimeSensorData(readingsToSensorData(readings));
 
-    if (!hasSensorData(sensorData) && Object.keys(state).length === 0) {
+    if (!hasSensorData(sensorData)) {
       return undefined;
     }
 
     return {
       deviceId: sensorTopicMatch[1],
       sensorData,
-      state,
+      state: {},
       raw,
     };
   }
@@ -97,21 +55,26 @@ export function parseRealtimeMessage(topic: string, payload: Buffer | string): B
   const shadowTopicMatch = topic.match(/^\$aws\/things\/([^/]+)\/shadow\/update\/documents$/);
   if (shadowTopicMatch) {
     const readings = collectSensorReadings(raw);
-    const sensorData = readingsToSensorData(readings);
-    const state = reportedShadowState(raw);
-    if (!hasSensorData(sensorData) && Object.keys(state).length === 0) {
+    const sensorData = readOnlyRealtimeSensorData(readingsToSensorData(readings));
+    if (!hasSensorData(sensorData)) {
       return undefined;
     }
 
     return {
       deviceId: shadowTopicMatch[1],
       sensorData,
-      state,
+      state: {},
       raw,
     };
   }
 
   return undefined;
+}
+
+function readOnlyRealtimeSensorData(sensorData: BlueAirDeviceSensorData): BlueAirDeviceSensorData {
+  const readOnlySensorData = { ...sensorData };
+  delete readOnlySensorData.fanspeed;
+  return readOnlySensorData;
 }
 
 export function realtimeSubscriptionTopics(deviceIds: string[]): string[] {

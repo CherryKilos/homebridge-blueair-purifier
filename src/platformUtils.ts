@@ -52,7 +52,7 @@ export const defaultConfig: Config = {
   accountUuid: '',
   region: Region.EU,
   autoExposeAvailableServices: true,
-  realtimeSensors: 'auto',
+  realtimeSensors: 'off',
   sensorProbeEnabled: false,
   pollingInterval: 15000,
   devices: [],

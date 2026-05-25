@@ -46,7 +46,7 @@ export declare class AirPurifierAccessory {
     setGermShield(value: CharacteristicValue): Promise<void>;
     getNightMode(): CharacteristicValue;
     setNightMode(value: CharacteristicValue): Promise<void>;
-    private getFanSpeedMax;
+    private getFanSpeedSpec;
     private getFanSpeedValue;
     private getFanSpeedAttribute;
     private getBrightnessMax;

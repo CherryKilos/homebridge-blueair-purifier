@@ -21,6 +21,12 @@ export interface BlueAirDevice {
     once<K extends keyof BlueAirDeviceEvents>(event: K, listener: BlueAirDeviceEvents[K]): this;
 }
 export declare class BlueAirDevice extends EventEmitter {
+    controlState: BlueAirDeviceState;
+    sensorState: BlueAirSensorDataWithAqi;
+    deviceMetadata: BlueAirDeviceStatus['deviceMetadata'];
+    /**
+     * Legacy aliases for accessory code that still reads state/sensorData.
+     */
     state: BlueAirDeviceState;
     sensorData: BlueAirSensorDataWithAqi;
     readonly id: string;

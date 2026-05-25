@@ -2,6 +2,7 @@ import { Logger } from 'homebridge';
 import { Region } from '../platformUtils';
 import { BlueAirDeviceStatusResponse } from './Consts';
 import type { BlueAirMqttAuth } from './BlueAirMqttTypes';
+import { DeviceAdapterMetadata } from '../device/adapters';
 export type BlueAirDeviceDiscovery = {
     mac: string;
     'mcu-firmware': string;
@@ -44,6 +45,13 @@ export type BlueAirDeviceSensorData = {
 export type BlueAirDeviceStatus = {
     id: string;
     name: string;
+    controlState: BlueAirDeviceState;
+    sensorState: BlueAirDeviceSensorData;
+    deviceMetadata: DeviceAdapterMetadata;
+    /**
+     * Legacy aliases kept for the existing accessory/device code while the plugin
+     * transitions to explicit control/sensor state.
+     */
     state: BlueAirDeviceState;
     sensorData: BlueAirDeviceSensorData;
 };
@@ -58,6 +66,7 @@ export type BlueAirSensorProbeResult = {
     ok: boolean;
     sensorData?: BlueAirDeviceSensorData;
     state?: BlueAirDeviceState;
+    fieldSources?: Record<string, string>;
     response?: unknown;
     error?: string;
 };
@@ -85,6 +94,9 @@ export default class BlueAirAwsApi {
     getHistoricalTelemetry(deviceId: string, durationMs?: number): Promise<BlueAirHistoricalTelemetry | undefined>;
     probeInitialSensorVariants(accountUuid: string, deviceId: string): Promise<BlueAirSensorProbeResult[]>;
     private shouldFetchHistoricalTelemetry;
+    private withLegacyAliases;
+    private sensorStateOnly;
+    private extractDeviceInfo;
     private getAwsAccessToken;
     private extractUserId;
     private apiCall;

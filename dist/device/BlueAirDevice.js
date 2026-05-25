@@ -33,21 +33,24 @@ class BlueAirDevice extends events_1.default {
         super();
         this.id = device.id;
         this.name = device.name;
-        this.state = device.state;
-        this.sensorData = {
-            ...device.sensorData,
+        this.controlState = device.controlState;
+        this.sensorState = {
+            ...device.sensorState,
             aqi: undefined,
         };
-        this.sensorData.aqi = this.calculateAqi();
+        this.sensorState.aqi = this.calculateAqi(this.sensorState);
+        this.deviceMetadata = device.deviceMetadata;
+        this.state = this.controlState;
+        this.sensorData = this.sensorState;
         this.mutex = new async_mutex_1.Mutex();
         this.currentChanges = {
             state: {},
             sensorData: {},
         };
-        this.last_brightness = this.state.brightness || 0;
+        this.last_brightness = this.controlState.brightness || 0;
         this.observedFanSpeedMax = 0;
         this.observedBrightnessMax = 0;
-        this.updateObservedMaxima(this.state, this.sensorData);
+        this.updateObservedMaxima(this.controlState);
         this.on('update', this.updateState.bind(this));
     }
     hasChanges(changes) {
@@ -70,18 +73,20 @@ class BlueAirDevice extends events_1.default {
         this.currentChanges = { state: {}, sensorData: {} };
         // if there is a change, emit update event
         if (this.hasChanges(changesToApply)) {
-            this.state = { ...this.state, ...changesToApply.state };
-            this.sensorData = { ...this.sensorData, ...changesToApply.sensorData };
-            this.updateObservedMaxima(changesToApply.state, changesToApply.sensorData);
+            this.controlState = { ...this.controlState, ...changesToApply.state };
+            this.sensorState = { ...this.sensorState, ...changesToApply.sensorData };
+            this.state = this.controlState;
+            this.sensorData = this.sensorState;
+            this.updateObservedMaxima(changesToApply.state);
             this.emit('stateUpdated', { ...changesToApply.state, ...changesToApply.sensorData });
         }
         release();
     }
     async setState(attribute, value) {
-        if (attribute in this.state === false) {
+        if (attribute in this.controlState === false) {
             throw new Error(`Invalid state: ${attribute}`);
         }
-        if (this.state[attribute] === value) {
+        if (this.controlState[attribute] === value) {
             return;
         }
         this.emit('setState', { id: this.id, name: this.name, attribute, value });
@@ -99,26 +104,30 @@ class BlueAirDevice extends events_1.default {
     }
     async setLedOn(value) {
         if (!value) {
-            this.last_brightness = this.state.brightness || 0;
+            this.last_brightness = this.controlState.brightness || 0;
         }
         const brightness = value ? this.last_brightness : 0;
         await this.setState('brightness', brightness);
     }
     async updateState(newState) {
+        var _a, _b, _c;
         const changedState = {};
         const changedSensorData = {};
-        for (const [k, v] of Object.entries(newState.state)) {
-            if (this.state[k] !== v) {
+        const incomingControlState = (_a = newState.controlState) !== null && _a !== void 0 ? _a : newState.state;
+        const incomingSensorState = (_b = newState.sensorState) !== null && _b !== void 0 ? _b : newState.sensorData;
+        this.deviceMetadata = (_c = newState.deviceMetadata) !== null && _c !== void 0 ? _c : this.deviceMetadata;
+        for (const [k, v] of Object.entries(incomingControlState)) {
+            if (this.controlState[k] !== v) {
                 changedState[k] = v;
             }
         }
-        for (const [k, v] of Object.entries(newState.sensorData)) {
-            if (this.sensorData[k] !== v) {
+        for (const [k, v] of Object.entries(incomingSensorState)) {
+            if (this.sensorState[k] !== v) {
                 changedSensorData[k] = v;
             }
         }
         if ('pm2_5' in changedSensorData || 'pm10' in changedSensorData || 'voc' in changedSensorData) {
-            changedSensorData.aqi = this.calculateAqi({ ...this.sensorData, ...changedSensorData });
+            changedSensorData.aqi = this.calculateAqi({ ...this.sensorState, ...changedSensorData });
         }
         await this.notifyStateUpdate(changedState, changedSensorData);
     }
@@ -128,9 +137,9 @@ class BlueAirDevice extends events_1.default {
     getObservedBrightnessMax() {
         return this.observedBrightnessMax;
     }
-    updateObservedMaxima(state, sensorData) {
+    updateObservedMaxima(state) {
         const rawFsp0 = state.fsp0;
-        const fanSpeed = typeof state.fanspeed === 'number' ? state.fanspeed : typeof rawFsp0 === 'number' ? rawFsp0 : sensorData === null || sensorData === void 0 ? void 0 : sensorData.fanspeed;
+        const fanSpeed = typeof state.fanspeed === 'number' ? state.fanspeed : typeof rawFsp0 === 'number' ? rawFsp0 : undefined;
         if (typeof fanSpeed === 'number' && fanSpeed > this.observedFanSpeedMax) {
             this.observedFanSpeedMax = fanSpeed;
         }
@@ -138,7 +147,7 @@ class BlueAirDevice extends events_1.default {
             this.observedBrightnessMax = state.brightness;
         }
     }
-    calculateAqi(sensorData = this.sensorData) {
+    calculateAqi(sensorData = this.sensorState) {
         if (sensorData.pm2_5 === undefined && sensorData.pm10 === undefined && sensorData.voc === undefined) {
             return undefined;
         }
