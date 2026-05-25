@@ -749,8 +749,9 @@ class AirPurifierAccessory {
         }
     }
     removeCharacteristicIfPresent(service, characteristic) {
-        if (service.testCharacteristic(characteristic)) {
-            service.removeCharacteristic(service.getCharacteristic(characteristic));
+        const existing = service.characteristics.find((serviceCharacteristic) => serviceCharacteristic.UUID === characteristic.UUID);
+        if (existing) {
+            service.removeCharacteristic(existing);
         }
     }
 }

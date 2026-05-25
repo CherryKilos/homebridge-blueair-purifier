@@ -163,21 +163,23 @@ export class BlueAirPlatform extends EventEmitter implements DynamicPlatformPlug
     }
 
     const sensorState = { ...update.sensorData };
+    delete sensorState.fanspeed;
+    delete sensorState.fsp0;
     if (!this.platformConfig.sensorDiagnostics) {
       delete sensorState.rssi;
     }
 
-    if (Object.keys(sensorState).length === 0 && Object.keys(update.state).length === 0) {
+    if (Object.keys(sensorState).length === 0) {
       return;
     }
 
     blueAirDevice.emit('update', {
       id: blueAirDevice.id,
       name: blueAirDevice.name,
-      controlState: update.state,
+      controlState: {},
       sensorState,
       deviceMetadata: blueAirDevice.deviceMetadata,
-      state: update.state,
+      state: {},
       sensorData: sensorState,
     });
   }

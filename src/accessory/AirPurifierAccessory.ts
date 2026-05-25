@@ -988,8 +988,9 @@ export class AirPurifierAccessory {
       | typeof this.platform.Characteristic.SwingMode
       | typeof this.platform.Characteristic.ConfiguredName,
   ) {
-    if (service.testCharacteristic(characteristic)) {
-      service.removeCharacteristic(service.getCharacteristic(characteristic));
+    const existing = service.characteristics.find((serviceCharacteristic) => serviceCharacteristic.UUID === characteristic.UUID);
+    if (existing) {
+      service.removeCharacteristic(existing);
     }
   }
 }
