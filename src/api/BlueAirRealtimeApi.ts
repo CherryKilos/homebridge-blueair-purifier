@@ -4,7 +4,13 @@ import type { IClientOptions, MqttClient } from 'mqtt';
 
 import type { BlueAirDeviceSensorData, BlueAirDeviceState } from './BlueAirAwsApi';
 import type { BlueAirMqttAuth } from './BlueAirMqttTypes';
-import { collectSensorReadings, hasSensorData, readingsToSensorData, readingsToState } from './BlueAirSensorData';
+import {
+  BlueAirDeviceSensorDataMap,
+  collectSensorReadings,
+  hasSensorData,
+  readingsToSensorData,
+  readingsToState,
+} from './BlueAirSensorData';
 
 export type BlueAirRealtimeUpdate = {
   deviceId: string;
@@ -15,6 +21,7 @@ export type BlueAirRealtimeUpdate = {
 
 const MAX_EMPTY_CLOSES = 4;
 const CLOSE_WINDOW_MS = 60 * 1000;
+const STATE_SENSOR_NAMES = new Set(['fanspeed', 'fsp0']);
 
 type WebsocketOptionsWithHeaders = {
   headers?: Record<string, string>;
@@ -35,6 +42,10 @@ function primitiveStateFromObject(value: unknown): BlueAirDeviceState {
   }
 
   return Object.entries(value).reduce((state, [key, entry]) => {
+    if (BlueAirDeviceSensorDataMap[key] && !STATE_SENSOR_NAMES.has(key)) {
+      return state;
+    }
+
     if (typeof entry === 'number' || typeof entry === 'boolean' || typeof entry === 'string') {
       state[key] = entry;
     }
@@ -85,14 +96,16 @@ export function parseRealtimeMessage(topic: string, payload: Buffer | string): B
 
   const shadowTopicMatch = topic.match(/^\$aws\/things\/([^/]+)\/shadow\/update\/documents$/);
   if (shadowTopicMatch) {
+    const readings = collectSensorReadings(raw);
+    const sensorData = readingsToSensorData(readings);
     const state = reportedShadowState(raw);
-    if (Object.keys(state).length === 0) {
+    if (!hasSensorData(sensorData) && Object.keys(state).length === 0) {
       return undefined;
     }
 
     return {
       deviceId: shadowTopicMatch[1],
-      sensorData: {},
+      sensorData,
       state,
       raw,
     };

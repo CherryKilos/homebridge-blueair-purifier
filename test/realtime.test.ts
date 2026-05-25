@@ -50,9 +50,43 @@ describe('Blueair realtime parser', () => {
     expect(update?.state.heattemp).toBe(260);
     expect(update?.sensorData.temperature).toBeUndefined();
   });
+
+  it('maps shadow sensor aliases without exposing raw sensor keys as state', () => {
+    const update = parseRealtimeMessage(
+      '$aws/things/<redacted-device-1>/shadow/update/documents',
+      JSON.stringify({
+        current: {
+          state: {
+            reported: {
+              pm2_: 0,
+              standby: false,
+            },
+          },
+        },
+      }),
+    );
+
+    expect(update?.sensorData.pm2_5).toBe(0);
+    expect(update?.state.pm2_).toBeUndefined();
+    expect(update?.state.standby).toBe(false);
+  });
 });
 
 describe('Blueair REST telemetry parser', () => {
+  it('does not treat SenML timestamps as temperature readings', () => {
+    const response = {
+      states: [
+        { n: 'tu', v: 1, t: 1779662697 },
+        { n: 'heattemp', v: 260, t: 1779662697 },
+        { n: 'fsp0', v: 37, t: 1779662697 },
+      ],
+    };
+
+    const sensorData = readingsToSensorData(collectSensorReadings(response));
+    expect(sensorData.temperature).toBeUndefined();
+    expect(sensorData.fanspeed).toBe(37);
+  });
+
   it('extracts t/h sensor readings from nested historical responses', () => {
     const response = {
       data: [

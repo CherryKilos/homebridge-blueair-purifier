@@ -5,6 +5,7 @@ const mqtt_1 = require("mqtt");
 const BlueAirSensorData_1 = require("./BlueAirSensorData");
 const MAX_EMPTY_CLOSES = 4;
 const CLOSE_WINDOW_MS = 60 * 1000;
+const STATE_SENSOR_NAMES = new Set(['fanspeed', 'fsp0']);
 function parseJsonPayload(payload) {
     try {
         return JSON.parse(Buffer.isBuffer(payload) ? payload.toString('utf8') : payload);
@@ -18,6 +19,9 @@ function primitiveStateFromObject(value) {
         return {};
     }
     return Object.entries(value).reduce((state, [key, entry]) => {
+        if (BlueAirSensorData_1.BlueAirDeviceSensorDataMap[key] && !STATE_SENSOR_NAMES.has(key)) {
+            return state;
+        }
         if (typeof entry === 'number' || typeof entry === 'boolean' || typeof entry === 'string') {
             state[key] = entry;
         }
@@ -60,13 +64,15 @@ function parseRealtimeMessage(topic, payload) {
     }
     const shadowTopicMatch = topic.match(/^\$aws\/things\/([^/]+)\/shadow\/update\/documents$/);
     if (shadowTopicMatch) {
+        const readings = (0, BlueAirSensorData_1.collectSensorReadings)(raw);
+        const sensorData = (0, BlueAirSensorData_1.readingsToSensorData)(readings);
         const state = reportedShadowState(raw);
-        if (Object.keys(state).length === 0) {
+        if (!(0, BlueAirSensorData_1.hasSensorData)(sensorData) && Object.keys(state).length === 0) {
             return undefined;
         }
         return {
             deviceId: shadowTopicMatch[1],
-            sensorData: {},
+            sensorData,
             state,
             raw,
         };

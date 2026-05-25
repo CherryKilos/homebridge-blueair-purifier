@@ -7,6 +7,7 @@ exports.BlueAirDeviceSensorDataMap = {
     h: 'humidity',
     pm1: 'pm1',
     pm10: 'pm10',
+    pm2_: 'pm2_5',
     pm2_5: 'pm2_5',
     t: 'temperature',
     tVOC: 'voc',
@@ -52,7 +53,10 @@ function collectSensorReadings(value, key = '') {
             },
         ];
     }
-    const readings = isSensorReading(value) ? [value] : [];
+    if (isSensorReading(value)) {
+        return [value];
+    }
+    const readings = [];
     for (const [entryKey, entry] of Object.entries(value)) {
         if (entry && typeof entry === 'object') {
             readings.push(...collectSensorReadings(entry, entryKey));
