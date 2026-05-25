@@ -124,3 +124,7 @@ dist
 
 # Webstorm
 .idea
+
+# Keep built plugin output committed for personal GitHub installs.
+!dist/
+!dist/**

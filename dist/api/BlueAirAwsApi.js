@@ -1,0 +1,180 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.BlueAirDeviceSensorDataMap = void 0;
+const GigyaApi_1 = __importDefault(require("./GigyaApi"));
+const Consts_1 = require("./Consts");
+const async_mutex_1 = require("async-mutex");
+exports.BlueAirDeviceSensorDataMap = {
+    fsp0: 'fanspeed',
+    hcho: 'hcho',
+    h: 'humidity',
+    pm1: 'pm1',
+    pm10: 'pm10',
+    pm2_5: 'pm2_5',
+    t: 'temperature',
+    tVOC: 'voc',
+};
+class BlueAirAwsApi {
+    constructor(username, password, region, logger) {
+        this.logger = logger;
+        const config = (0, Consts_1.getAwsConfig)(region);
+        this.blueAirApiUrl = `https://${config.restApiId}.execute-api.${config.awsRegion}.amazonaws.com/prod/c`;
+        this.mutex = new async_mutex_1.Mutex();
+        this.logger.debug(`Creating BlueAir API instance with config: ${JSON.stringify(config)} and username: ${username}\
+    and region: ${region}`);
+        this.gigyaApi = new GigyaApi_1.default(username, password, region, logger);
+        this.last_login = 0;
+        this.accessToken = '';
+    }
+    async login() {
+        this.logger.debug('Logging in...');
+        const { token, secret } = await this.gigyaApi.getGigyaSession();
+        const { jwt } = await this.gigyaApi.getGigyaJWT(token, secret);
+        const { accessToken } = await this.getAwsAccessToken(jwt);
+        this.last_login = Date.now();
+        this.accessToken = accessToken;
+        this.logger.debug('Logged in');
+    }
+    async checkTokenExpiration() {
+        if (Consts_1.LOGIN_EXPIRATION < Date.now() - this.last_login) {
+            this.logger.debug('Token expired, logging in again');
+            return await this.login();
+        }
+        return;
+    }
+    async getDevices() {
+        await this.checkTokenExpiration();
+        this.logger.debug('Getting devices...');
+        const response = await this.apiCall('/registered-devices', undefined, 'GET');
+        if (!response.devices) {
+            throw new Error('getDevices error: no devices in response');
+        }
+        const devices = response.devices;
+        return devices;
+    }
+    async getDeviceStatus(accountUuid, uuids) {
+        const data = await this.getRawDeviceStatus(accountUuid, uuids);
+        const deviceStatuses = data.deviceInfo.map((device) => {
+            return {
+                id: device.id,
+                name: device.configuration.di.name,
+                sensorData: device.sensordata.reduce((acc, sensor) => {
+                    const key = exports.BlueAirDeviceSensorDataMap[sensor.n];
+                    if (key) {
+                        acc[key] = sensor.v;
+                    }
+                    return acc;
+                }, {}),
+                state: device.states.reduce((acc, state) => {
+                    if (state.v !== undefined) {
+                        acc[state.n] = state.v;
+                    }
+                    else if (state.vb !== undefined) {
+                        acc[state.n] = state.vb;
+                    }
+                    else {
+                        this.logger.warn(`getDeviceStatus: unknown state ${JSON.stringify(state)}`);
+                    }
+                    return acc;
+                }, {}),
+            };
+        });
+        return deviceStatuses;
+    }
+    async getRawDeviceStatus(accountUuid, uuids) {
+        await this.checkTokenExpiration();
+        const body = {
+            deviceconfigquery: uuids.map((uuid) => ({ id: uuid, r: { r: ['sensors'] } })),
+            includestates: true,
+            eventsubscription: {
+                include: uuids.map((uuid) => ({ filter: { o: `= ${uuid}` } })),
+            },
+        };
+        const data = await this.apiCall(`/${accountUuid}/r/initial`, body);
+        if (!data.deviceInfo) {
+            throw new Error('getDeviceStatus error: no deviceInfo in response');
+        }
+        return data;
+    }
+    async setDeviceStatus(uuid, state, value) {
+        await this.checkTokenExpiration();
+        // this.logger.debug(`setDeviceStatus: ${uuid} ${state} ${value}`);
+        const body = {
+            n: state,
+        };
+        if (typeof value === 'number') {
+            body.v = value;
+        }
+        else if (typeof value === 'boolean') {
+            body.vb = value;
+        }
+        else {
+            throw new Error(`setDeviceStatus: unknown value type ${typeof value}`);
+        }
+        // const response = await this.apiCall(`/${uuid}/a/${state}`, body);
+        await this.apiCall(`/${uuid}/a/${state}`, body);
+        // this.logger.debug(`setDeviceStatus response: ${JSON.stringify(response)}`);
+    }
+    async getAwsAccessToken(jwt) {
+        this.logger.debug('Getting AWS access token...');
+        const response = await this.apiCall('/login', undefined, 'POST', {
+            Authorization: `Bearer ${jwt}`,
+            idtoken: jwt,
+        });
+        if (!response.access_token) {
+            throw new Error(`AWS access token error: ${JSON.stringify(response)}`);
+        }
+        this.logger.debug('AWS access token received');
+        return {
+            accessToken: response.access_token,
+        };
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    async apiCall(url, data, method = 'POST', headers, retries = 3) {
+        const release = await this.mutex.acquire();
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), Consts_1.BLUEAIR_API_TIMEOUT);
+        try {
+            const response = await fetch(`${this.blueAirApiUrl}${url}`, {
+                method: method,
+                headers: {
+                    Accept: '*/*',
+                    Connection: 'keep-alive',
+                    'Accept-Encoding': 'gzip, deflate, br',
+                    Authorization: `Bearer ${this.accessToken}`,
+                    idtoken: this.accessToken,
+                    ...headers,
+                },
+                body: JSON.stringify(data),
+                signal: controller.signal,
+            });
+            const json = await response.json();
+            if (response.status !== 200) {
+                throw new Error(`API call error with status ${response.status}: ${response.statusText}, ${JSON.stringify(json)}`);
+            }
+            return json;
+        }
+        catch (error) {
+            if (retries > 0) {
+                return this.apiCall(url, data, method, headers, retries - 1);
+            }
+            else {
+                if (error instanceof Error && error.name === 'AbortError') {
+                    throw new Error(`API call failed after ${3 - retries} retries with timeout.`);
+                }
+                else {
+                    throw new Error(`API call failed after ${3 - retries} retries with error: ${error}`);
+                }
+            }
+        }
+        finally {
+            clearTimeout(timeout);
+            release();
+        }
+    }
+}
+exports.default = BlueAirAwsApi;
+//# sourceMappingURL=BlueAirAwsApi.js.map
