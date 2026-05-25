@@ -18,6 +18,9 @@ describe('Blueair realtime parser', () => {
         { n: 't', v: 260, t: 1779663000 },
         { n: 'h', v: 43, t: 1779663000 },
         { n: 'pm2_5', v: 4, t: 1779663000 },
+        { n: 'tVOC', v: 80, t: 1779663000 },
+        { n: 'hcho', v: 2, t: 1779663000 },
+        { n: 'rssi', v: -51, t: 1779663000 },
         { n: 'fsp0', v: 37, t: 1779663000 },
       ]),
     );
@@ -26,6 +29,9 @@ describe('Blueair realtime parser', () => {
     expect(update?.sensorData.temperature).toBe(260);
     expect(update?.sensorData.humidity).toBe(43);
     expect(update?.sensorData.pm2_5).toBe(4);
+    expect(update?.sensorData.voc).toBe(80);
+    expect(update?.sensorData.hcho).toBe(2);
+    expect(update?.sensorData.rssi).toBe(-51);
     expect(update?.sensorData.fanspeed).toBeUndefined();
     expect(update?.state).toEqual({});
   });

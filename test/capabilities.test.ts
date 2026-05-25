@@ -25,6 +25,16 @@ const testDeviceMetadata = {
   rawSensorNames: [],
   rawStateNames: [],
   dataSourceNames: [],
+  declaredDataSources: {
+    dc: [],
+    ds: [],
+    rt1s: [],
+    rt5s: [],
+    rt5m: [],
+    b5m: [],
+  },
+  declaredRealtimeSensors: [],
+  ignoredFields: [],
 };
 
 const redactedFixtures = {
@@ -158,6 +168,31 @@ describe('capability inference', () => {
 });
 
 describe('BlueAirDevice AQI updates', () => {
+  it('does not update local control cache after a failed write', async () => {
+    const device = new BlueAirDevice({
+      id: '<redacted-device-1>',
+      name: 'Blueair Test',
+      controlState: {
+        fanspeed: 3,
+        standby: false,
+      },
+      sensorState: {},
+      deviceMetadata: testDeviceMetadata,
+      state: {
+        fanspeed: 3,
+        standby: false,
+      },
+      sensorData: {},
+    });
+
+    const setPromise = device.setState('fanspeed', 10);
+    await new Promise((resolve) => setImmediate(resolve));
+    device.emit('setStateDone', false);
+    await setPromise;
+
+    expect(device.controlState.fanspeed).toBe(3);
+  });
+
   it('recalculates AQI when pm2_5 changes', async () => {
     const device = new BlueAirDevice({
       id: '<redacted-device-1>',

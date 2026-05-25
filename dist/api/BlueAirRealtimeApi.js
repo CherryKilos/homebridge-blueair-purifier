@@ -67,6 +67,7 @@ class BlueAirRealtimeApi {
         this.closeTimes = [];
         this.messagesReceived = 0;
         this.stopping = false;
+        this.loggedFirstPayloadKeys = new Set();
     }
     start() {
         if (this.client) {
@@ -108,6 +109,7 @@ class BlueAirRealtimeApi {
             const update = parseRealtimeMessage(topic, payload);
             if (update) {
                 this.messagesReceived++;
+                this.logFirstPayloadKeys(topic, update);
                 this.onUpdate(update);
             }
         });
@@ -143,6 +145,16 @@ class BlueAirRealtimeApi {
             return;
         }
         this.resubscribeTimer = setInterval(() => this.subscribe(), 15 * 60 * 1000);
+    }
+    logFirstPayloadKeys(topic, update) {
+        if (this.loggedFirstPayloadKeys.has(update.deviceId)) {
+            return;
+        }
+        this.loggedFirstPayloadKeys.add(update.deviceId);
+        const sensorKeys = Object.keys(update.sensorData).sort();
+        const stateKeys = Object.keys(update.state).sort();
+        this.logger.debug(`[${update.deviceId}] Blueair realtime first payload: topic=${topic}, ` +
+            `sensor keys=${sensorKeys.join(',') || 'none'}, state keys=${stateKeys.join(',') || 'none'}`);
     }
     handleClose() {
         if (this.stopping) {

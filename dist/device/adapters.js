@@ -11,6 +11,7 @@ const BLUE_PURE_MAX_ADAPTER = {
     },
     brightnessMax: 100,
     controlKeys: new Set(['automode', 'brightness', 'childlock', 'fanspeed', 'filterusage', 'germshield', 'nightmode', 'online', 'standby']),
+    ignoredFields: ['fsp0'],
     matches: (deviceInfo) => {
         const hardware = hardwareName(deviceInfo);
         return (hardware.startsWith('nb_') ||
@@ -27,8 +28,60 @@ const COMFORT_PURE_T10I_ADAPTER = {
         rawMax: 91,
         rawValues: [11, 37, 64, 91],
     },
+    displayBrightness: {
+        attribute: 'nmbrightness',
+        rawMax: 100,
+    },
+    oscillation: {
+        attribute: 'osc',
+        stateAttribute: 'oscstate',
+        directionAttribute: 'oscdir',
+        speedAttribute: 'oscfs',
+    },
+    sleepTimer: {
+        stateAttribute: 'timstate',
+        durationAttribute: 'timdur',
+        remainingAttribute: 'timl',
+        startedAtAttribute: 'timts',
+        presetSeconds: [30 * 60, 60 * 60, 2 * 60 * 60, 4 * 60 * 60],
+    },
+    climate: {
+        modeAttribute: 'mainmode',
+        heatSetpointAttribute: 'heattemp',
+        heatFanAttribute: 'heatfs',
+        coolFanAttribute: 'coolfs',
+        fanFanAttribute: 'fsp0',
+        heatSubmodeAttribute: 'heatsubmode',
+        coolSubmodeAttribute: 'coolsubmode',
+        autoPurifySubmodeAttribute: 'apsubmode',
+    },
     brightnessMax: 10,
-    controlKeys: new Set(['brightness', 'childlock', 'filterusage', 'fsp0', 'online', 'standby']),
+    controlKeys: new Set([
+        'apsubmode',
+        'brightness',
+        'childlock',
+        'coolfs',
+        'coolsubmode',
+        'filterusage',
+        'fsp0',
+        'heatfs',
+        'heatsubmode',
+        'heattemp',
+        'mainmode',
+        'nmbrightness',
+        'online',
+        'osc',
+        'oscdir',
+        'oscfs',
+        'oscstate',
+        'standby',
+        'timdur',
+        'timl',
+        'timstate',
+        'timts',
+        'tu',
+    ]),
+    ignoredFields: ['ecoheattemp', 'pm2_5c', 'rssi', 'rt1s', 'rt5m', 'rt5s', 'b5m'],
     matches: (deviceInfo) => hardwareName(deviceInfo).startsWith('cmb3in1') ||
         deviceInfo.configuration.di.name.toLowerCase().includes('comfort') ||
         (hasState(deviceInfo, 'fsp0') &&
@@ -43,6 +96,56 @@ function hardwareName(deviceInfo) {
 }
 function sku(deviceInfo) {
     return typeof deviceInfo.configuration.di.sku === 'string' ? deviceInfo.configuration.di.sku : undefined;
+}
+function isRecord(value) {
+    return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+function uniqueSorted(values) {
+    return [...new Set(values.filter(Boolean))].sort();
+}
+function splitSourceNames(value) {
+    return value
+        .split(/[,\s]+/)
+        .map((entry) => entry.trim())
+        .filter(Boolean);
+}
+function extractSourceNames(value) {
+    if (!value) {
+        return [];
+    }
+    if (typeof value === 'string') {
+        return splitSourceNames(value);
+    }
+    if (Array.isArray(value)) {
+        return uniqueSorted(value.flatMap((entry) => extractSourceNames(entry)));
+    }
+    if (!isRecord(value)) {
+        return [];
+    }
+    if (typeof value.n === 'string') {
+        return [value.n];
+    }
+    if (value.sn !== undefined) {
+        return extractSourceNames(value.sn);
+    }
+    const sensorLikeKeys = Object.keys(value).filter((key) => BlueAirSensorData_1.BlueAirDeviceSensorDataMap[key] || key === 'rssi');
+    return uniqueSorted(sensorLikeKeys);
+}
+function declaredDataSources(deviceInfo) {
+    var _a, _b;
+    const ds = (_a = deviceInfo.configuration.ds) !== null && _a !== void 0 ? _a : {};
+    const dc = (_b = deviceInfo.configuration.dc) !== null && _b !== void 0 ? _b : {};
+    return {
+        dc: uniqueSorted(Object.keys(dc)),
+        ds: uniqueSorted(Object.keys(ds)),
+        rt1s: extractSourceNames(ds.rt1s),
+        rt5s: extractSourceNames(ds.rt5s),
+        rt5m: extractSourceNames(ds.rt5m),
+        b5m: extractSourceNames(ds.b5m),
+    };
+}
+function declaredRealtimeSensors(dataSources) {
+    return uniqueSorted([...dataSources.rt1s, ...dataSources.rt5s, ...dataSources.rt5m, ...dataSources.b5m]);
 }
 function stateValue(state) {
     if (state.v !== undefined) {
@@ -82,12 +185,20 @@ function selectDeviceAdapter(deviceInfo) {
     return (_a = ADAPTERS.find((adapter) => adapter.matches(deviceInfo))) !== null && _a !== void 0 ? _a : BLUE_PURE_MAX_ADAPTER;
 }
 function normalizeRawDeviceInfo(deviceInfo) {
-    var _a;
     const adapter = selectDeviceAdapter(deviceInfo);
     const fieldSources = {};
     const controlState = normalizeControlState(deviceInfo, adapter, fieldSources);
     const fanSpeed = adapter.fanSpeed && controlState[adapter.fanSpeed.attribute] !== undefined ? adapter.fanSpeed : undefined;
+    const displayBrightness = adapter.displayBrightness && controlState[adapter.displayBrightness.attribute] !== undefined ? adapter.displayBrightness : undefined;
+    const oscillation = adapter.oscillation && controlState[adapter.oscillation.attribute] !== undefined ? adapter.oscillation : undefined;
+    const sleepTimer = adapter.sleepTimer &&
+        controlState[adapter.sleepTimer.stateAttribute] !== undefined &&
+        controlState[adapter.sleepTimer.durationAttribute] !== undefined
+        ? adapter.sleepTimer
+        : undefined;
+    const climate = adapter.climate && controlState[adapter.climate.modeAttribute] !== undefined ? adapter.climate : undefined;
     const sensorState = normalizeSensorState(deviceInfo, fieldSources);
+    const dataSources = declaredDataSources(deviceInfo);
     return {
         id: deviceInfo.id,
         name: deviceInfo.configuration.di.name,
@@ -97,11 +208,18 @@ function normalizeRawDeviceInfo(deviceInfo) {
             adapterId: adapter.id,
             adapterName: adapter.name,
             fanSpeed,
+            displayBrightness,
+            oscillation,
+            sleepTimer,
+            climate,
             brightnessMax: adapter.brightnessMax,
             fieldSources,
             rawSensorNames: deviceInfo.sensordata.map((sensor) => sensor.n),
             rawStateNames: deviceInfo.states.map((state) => state.n),
-            dataSourceNames: Object.keys((_a = deviceInfo.configuration.ds) !== null && _a !== void 0 ? _a : {}),
+            dataSourceNames: dataSources.ds,
+            declaredDataSources: dataSources,
+            declaredRealtimeSensors: declaredRealtimeSensors(dataSources),
+            ignoredFields: adapter.ignoredFields,
             hardware: hardwareName(deviceInfo) || undefined,
             sku: sku(deviceInfo),
         },

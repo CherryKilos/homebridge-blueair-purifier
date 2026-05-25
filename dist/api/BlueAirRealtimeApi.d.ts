@@ -20,11 +20,13 @@ export default class BlueAirRealtimeApi {
     private closeTimes;
     private messagesReceived;
     private stopping;
+    private loggedFirstPayloadKeys;
     constructor(auth: BlueAirMqttAuth, deviceIds: string[], logger: Logger, onUpdate: (update: BlueAirRealtimeUpdate) => void);
     start(): void;
     stop(): void;
     private subscribe;
     private startResubscribeTimer;
+    private logFirstPayloadKeys;
     private handleClose;
 }
 //# sourceMappingURL=BlueAirRealtimeApi.d.ts.map

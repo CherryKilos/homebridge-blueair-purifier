@@ -87,6 +87,7 @@ export default class BlueAirRealtimeApi {
   private closeTimes: number[] = [];
   private messagesReceived = 0;
   private stopping = false;
+  private loggedFirstPayloadKeys = new Set<string>();
 
   constructor(
     private readonly auth: BlueAirMqttAuth,
@@ -136,6 +137,7 @@ export default class BlueAirRealtimeApi {
       const update = parseRealtimeMessage(topic, payload);
       if (update) {
         this.messagesReceived++;
+        this.logFirstPayloadKeys(topic, update);
         this.onUpdate(update);
       }
     });
@@ -177,6 +179,20 @@ export default class BlueAirRealtimeApi {
     }
 
     this.resubscribeTimer = setInterval(() => this.subscribe(), 15 * 60 * 1000);
+  }
+
+  private logFirstPayloadKeys(topic: string, update: BlueAirRealtimeUpdate): void {
+    if (this.loggedFirstPayloadKeys.has(update.deviceId)) {
+      return;
+    }
+
+    this.loggedFirstPayloadKeys.add(update.deviceId);
+    const sensorKeys = Object.keys(update.sensorData).sort();
+    const stateKeys = Object.keys(update.state).sort();
+    this.logger.debug(
+      `[${update.deviceId}] Blueair realtime first payload: topic=${topic}, ` +
+        `sensor keys=${sensorKeys.join(',') || 'none'}, state keys=${stateKeys.join(',') || 'none'}`,
+    );
   }
 
   private handleClose(): void {

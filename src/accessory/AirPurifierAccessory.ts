@@ -13,6 +13,19 @@ import {
   temperatureToCelsius,
 } from '../device/capabilities';
 import { FanSpeedWriteSpec, fanPercentToRaw, fanRawToPercent } from '../device/adapters';
+import { sanitizeHomeKitName, serviceName } from './homekitNames';
+import {
+  blueairTemperatureToCelsius,
+  booleanStateValue,
+  booleanWriteValue,
+  celsiusToBlueairSetpoint,
+  clampClimateSetpoint,
+  COMFORT_PURE_MAIN_MODE,
+  nearestTimerPresetSeconds,
+  numericStateValue,
+  timerDurationSeconds,
+  timerRemainingSeconds,
+} from '../device/comfortPureControls';
 
 export class AirPurifierAccessory {
   private service: Service;
@@ -23,9 +36,16 @@ export class AirPurifierAccessory {
   private humidityService?: Service;
   private germShieldService?: Service;
   private nightModeService?: Service;
+  private displayLightService?: Service;
+  private sleepTimerService?: Service;
+  private climateService?: Service;
   private supportsAutoMode = false;
   private supportsChildLock = false;
   private supportsFanSpeed = false;
+  private supportsDisplayLight = false;
+  private supportsOscillation = false;
+  private supportsSleepTimer = false;
+  private lastDisplayBrightness = 100;
 
   constructor(
     protected readonly platform: BlueAirPlatform,
@@ -42,14 +62,22 @@ export class AirPurifierAccessory {
     const capabilities = inferDeviceCapabilities(this.device.controlState, this.device.sensorState);
     const autoExposeAvailableServices = this.platform.platformConfig.autoExposeAvailableServices;
     const disabledServices = this.configDev.disabledServices ?? [];
+    const baseName = sanitizeHomeKitName(this.configDev.name || this.device.name);
     this.supportsAutoMode = capabilities.controls.autoMode;
     this.supportsChildLock = capabilities.controls.childLock;
     this.supportsFanSpeed = Boolean(this.device.deviceMetadata.fanSpeed);
+    this.supportsDisplayLight = Boolean(this.device.deviceMetadata.displayBrightness);
+    this.supportsOscillation = Boolean(this.device.deviceMetadata.oscillation);
+    this.supportsSleepTimer = Boolean(this.device.deviceMetadata.sleepTimer);
+    this.lastDisplayBrightness =
+      typeof this.device.controlState.nmbrightness === 'number' && this.device.controlState.nmbrightness > 0
+        ? this.device.controlState.nmbrightness
+        : this.getDisplayBrightnessMax();
 
     this.service =
       this.accessory.getService(this.platform.Service.AirPurifier) || this.accessory.addService(this.platform.Service.AirPurifier);
 
-    this.service.setCharacteristic(this.platform.Characteristic.Name, this.configDev.name);
+    this.service.setCharacteristic(this.platform.Characteristic.Name, baseName);
     this.service.getCharacteristic(this.platform.Characteristic.Active).onGet(this.getActive.bind(this)).onSet(this.setActive.bind(this));
 
     this.service.getCharacteristic(this.platform.Characteristic.CurrentAirPurifierState).onGet(this.getCurrentAirPurifierState.bind(this));
@@ -77,6 +105,15 @@ export class AirPurifierAccessory {
       this.removeCharacteristicIfPresent(this.service, this.platform.Characteristic.RotationSpeed);
     }
 
+    if (this.supportsOscillation && !disabledServices.includes('oscillation')) {
+      this.service
+        .getCharacteristic(this.platform.Characteristic.SwingMode)
+        .onGet(this.getSwingMode.bind(this))
+        .onSet(this.setSwingMode.bind(this));
+    } else {
+      this.removeCharacteristicIfPresent(this.service, this.platform.Characteristic.SwingMode);
+    }
+
     this.filterMaintenanceService =
       this.accessory.getService(this.platform.Service.FilterMaintenance) ||
       this.accessory.addService(this.platform.Service.FilterMaintenance);
@@ -89,9 +126,10 @@ export class AirPurifierAccessory {
 
     this.ledService = this.accessory.getServiceById(this.platform.Service.Lightbulb, 'Led');
     if (shouldExposeService('led', this.configDev.led, capabilities.controls.brightness, autoExposeAvailableServices, disabledServices)) {
-      this.ledService ??= this.accessory.addService(this.platform.Service.Lightbulb, `${this.device.name} Led`, 'Led');
-      this.ledService.setCharacteristic(this.platform.Characteristic.Name, `${this.device.name} Led`);
-      this.ledService.setCharacteristic(this.platform.Characteristic.ConfiguredName, `${this.device.name} Led`);
+      const ledName = serviceName(baseName, 'Led');
+      this.ledService ??= this.accessory.addService(this.platform.Service.Lightbulb, ledName, 'Led');
+      this.ledService.setCharacteristic(this.platform.Characteristic.Name, ledName);
+      this.ledService.setCharacteristic(this.platform.Characteristic.ConfiguredName, ledName);
       this.ledService.getCharacteristic(this.platform.Characteristic.On).onGet(this.getLedOn.bind(this)).onSet(this.setLedOn.bind(this));
       this.ledService
         .getCharacteristic(this.platform.Characteristic.Brightness)
@@ -113,7 +151,7 @@ export class AirPurifierAccessory {
     ) {
       this.airQualityService ??= this.accessory.addService(
         this.platform.Service.AirQualitySensor,
-        `${this.device.name} Air Quality`,
+        serviceName(baseName, 'Air Quality'),
         'AirQuality',
       );
       this.airQualityService.getCharacteristic(this.platform.Characteristic.AirQuality).onGet(this.getAirQuality.bind(this));
@@ -137,7 +175,7 @@ export class AirPurifierAccessory {
     ) {
       this.temperatureService ??= this.accessory.addService(
         this.platform.Service.TemperatureSensor,
-        `${this.device.name} Temperature`,
+        serviceName(baseName, 'Temperature'),
         'Temperature',
       );
       this.temperatureService
@@ -158,7 +196,11 @@ export class AirPurifierAccessory {
         disabledServices,
       )
     ) {
-      this.humidityService ??= this.accessory.addService(this.platform.Service.HumiditySensor, `${this.device.name} Humidity`, 'Humidity');
+      this.humidityService ??= this.accessory.addService(
+        this.platform.Service.HumiditySensor,
+        serviceName(baseName, 'Humidity'),
+        'Humidity',
+      );
       this.humidityService
         .getCharacteristic(this.platform.Characteristic.CurrentRelativeHumidity)
         .onGet(this.getCurrentRelativeHumidity.bind(this));
@@ -177,9 +219,10 @@ export class AirPurifierAccessory {
         disabledServices,
       )
     ) {
-      this.germShieldService ??= this.accessory.addService(this.platform.Service.Switch, `${this.device.name} Germ Shield`, 'GermShield');
-      this.germShieldService.setCharacteristic(this.platform.Characteristic.Name, `${this.device.name} Germ Shield`);
-      this.germShieldService.setCharacteristic(this.platform.Characteristic.ConfiguredName, `${this.device.name} Germ Shield`);
+      const germShieldName = serviceName(baseName, 'Germ Shield');
+      this.germShieldService ??= this.accessory.addService(this.platform.Service.Switch, germShieldName, 'GermShield');
+      this.germShieldService.setCharacteristic(this.platform.Characteristic.Name, germShieldName);
+      this.germShieldService.setCharacteristic(this.platform.Characteristic.ConfiguredName, germShieldName);
       this.germShieldService
         .getCharacteristic(this.platform.Characteristic.On)
         .onGet(this.getGermShield.bind(this))
@@ -198,9 +241,10 @@ export class AirPurifierAccessory {
         disabledServices,
       )
     ) {
-      this.nightModeService ??= this.accessory.addService(this.platform.Service.Switch, `${this.device.name} Night Mode`, 'NightMode');
-      this.nightModeService.setCharacteristic(this.platform.Characteristic.Name, `${this.device.name} Night Mode`);
-      this.nightModeService.setCharacteristic(this.platform.Characteristic.ConfiguredName, `${this.device.name} Night Mode`);
+      const nightModeName = serviceName(baseName, 'Night Mode');
+      this.nightModeService ??= this.accessory.addService(this.platform.Service.Switch, nightModeName, 'NightMode');
+      this.nightModeService.setCharacteristic(this.platform.Characteristic.Name, nightModeName);
+      this.nightModeService.setCharacteristic(this.platform.Characteristic.ConfiguredName, nightModeName);
       this.nightModeService
         .getCharacteristic(this.platform.Characteristic.On)
         .onGet(this.getNightMode.bind(this))
@@ -208,6 +252,56 @@ export class AirPurifierAccessory {
     } else if (this.nightModeService) {
       this.accessory.removeService(this.nightModeService);
     }
+
+    this.displayLightService = this.accessory.getServiceById(this.platform.Service.Lightbulb, 'DisplayLight');
+    if (this.supportsDisplayLight && !disabledServices.includes('displayLight')) {
+      const displayName = serviceName(baseName, 'Display');
+      this.displayLightService ??= this.accessory.addService(this.platform.Service.Lightbulb, displayName, 'DisplayLight');
+      this.displayLightService.setCharacteristic(this.platform.Characteristic.Name, displayName);
+      this.displayLightService.setCharacteristic(this.platform.Characteristic.ConfiguredName, displayName);
+      this.displayLightService
+        .getCharacteristic(this.platform.Characteristic.On)
+        .onGet(this.getDisplayLightOn.bind(this))
+        .onSet(this.setDisplayLightOn.bind(this));
+      this.displayLightService
+        .getCharacteristic(this.platform.Characteristic.Brightness)
+        .onGet(this.getDisplayBrightness.bind(this))
+        .onSet(this.setDisplayBrightness.bind(this));
+    } else if (this.displayLightService) {
+      this.accessory.removeService(this.displayLightService);
+      this.displayLightService = undefined;
+    }
+
+    this.sleepTimerService = this.accessory.getServiceById(this.platform.Service.Switch, 'SleepTimer');
+    if (this.supportsSleepTimer && !disabledServices.includes('sleepTimer')) {
+      const sleepTimerName = serviceName(baseName, 'Sleep Timer');
+      this.sleepTimerService ??= this.accessory.addService(this.platform.Service.Switch, sleepTimerName, 'SleepTimer');
+      this.sleepTimerService.setCharacteristic(this.platform.Characteristic.Name, sleepTimerName);
+      this.sleepTimerService.setCharacteristic(this.platform.Characteristic.ConfiguredName, sleepTimerName);
+      this.sleepTimerService
+        .getCharacteristic(this.platform.Characteristic.On)
+        .onGet(this.getSleepTimerOn.bind(this))
+        .onSet(this.setSleepTimerOn.bind(this));
+      this.sleepTimerService
+        .getCharacteristic(this.platform.Characteristic.SetDuration)
+        .setProps({ minValue: 30 * 60, maxValue: 4 * 60 * 60, minStep: 30 * 60 })
+        .onGet(this.getSleepTimerDuration.bind(this))
+        .onSet(this.setSleepTimerDuration.bind(this));
+      this.sleepTimerService
+        .getCharacteristic(this.platform.Characteristic.RemainingDuration)
+        .setProps({ minValue: 0, maxValue: 4 * 60 * 60, minStep: 1 })
+        .onGet(this.getSleepTimerRemaining.bind(this));
+    } else if (this.sleepTimerService) {
+      this.accessory.removeService(this.sleepTimerService);
+      this.sleepTimerService = undefined;
+    }
+
+    this.climateService = this.accessory.getServiceById(this.platform.Service.HeaterCooler, 'ComfortPureClimate');
+    if (!this.shouldExposeComfortPureClimate() && this.climateService) {
+      this.accessory.removeService(this.climateService);
+      this.climateService = undefined;
+    }
+    this.ensureClimateService();
 
     this.device.on('stateUpdated', this.updateCharacteristics.bind(this));
   }
@@ -220,6 +314,7 @@ export class AirPurifierAccessory {
       switch (k) {
         case 'standby':
           updateState = true;
+          this.updateClimateCharacteristics();
           break;
         case 'automode':
           this.service.updateCharacteristic(this.platform.Characteristic.TargetAirPurifierState, this.getTargetAirPurifierState());
@@ -236,6 +331,7 @@ export class AirPurifierAccessory {
             this.service.updateCharacteristic(this.platform.Characteristic.Active, this.getActive());
             this.service.updateCharacteristic(this.platform.Characteristic.CurrentAirPurifierState, this.getCurrentAirPurifierState());
           }
+          this.updateClimateCharacteristics();
           break;
         case 'filterusage':
           this.filterMaintenanceService?.updateCharacteristic(
@@ -247,6 +343,8 @@ export class AirPurifierAccessory {
         case 'temperature':
           this.ensureTemperatureService();
           this.temperatureService?.updateCharacteristic(this.platform.Characteristic.CurrentTemperature, this.getCurrentTemperature());
+          this.ensureClimateService();
+          this.updateClimateCharacteristics();
           break;
         case 'humidity':
           this.ensureHumidityService();
@@ -258,6 +356,10 @@ export class AirPurifierAccessory {
         case 'brightness':
           this.ledService?.updateCharacteristic(this.platform.Characteristic.On, this.getLedOn());
           this.ledService?.updateCharacteristic(this.platform.Characteristic.Brightness, this.getLedBrightness());
+          break;
+        case 'nmbrightness':
+          this.displayLightService?.updateCharacteristic(this.platform.Characteristic.On, this.getDisplayLightOn());
+          this.displayLightService?.updateCharacteristic(this.platform.Characteristic.Brightness, this.getDisplayBrightness());
           break;
         case 'pm2_5':
           this.ensureAirQualityService();
@@ -280,6 +382,30 @@ export class AirPurifierAccessory {
         case 'nightmode':
           this.nightModeService?.updateCharacteristic(this.platform.Characteristic.On, this.getNightMode());
           break;
+        case 'osc':
+        case 'oscstate':
+          if (this.supportsOscillation) {
+            this.service.updateCharacteristic(this.platform.Characteristic.SwingMode, this.getSwingMode());
+          }
+          this.climateService?.updateCharacteristic(this.platform.Characteristic.SwingMode, this.getSwingMode());
+          break;
+        case 'timstate':
+        case 'timdur':
+        case 'timl':
+        case 'timts':
+          this.sleepTimerService?.updateCharacteristic(this.platform.Characteristic.On, this.getSleepTimerOn());
+          this.sleepTimerService?.updateCharacteristic(this.platform.Characteristic.SetDuration, this.getSleepTimerDuration());
+          this.sleepTimerService?.updateCharacteristic(this.platform.Characteristic.RemainingDuration, this.getSleepTimerRemaining());
+          break;
+        case 'mainmode':
+        case 'heattemp':
+        case 'heatfs':
+        case 'coolfs':
+        case 'heatsubmode':
+        case 'coolsubmode':
+        case 'apsubmode':
+          this.updateClimateCharacteristics();
+          break;
       }
 
       if (updateState) {
@@ -292,6 +418,8 @@ export class AirPurifierAccessory {
         this.ledService?.updateCharacteristic(this.platform.Characteristic.On, this.getLedOn());
         this.germShieldService?.updateCharacteristic(this.platform.Characteristic.On, this.getGermShield());
         this.nightModeService?.updateCharacteristic(this.platform.Characteristic.On, this.getNightMode());
+        this.displayLightService?.updateCharacteristic(this.platform.Characteristic.On, this.getDisplayLightOn());
+        this.updateClimateCharacteristics();
       }
 
       if (updateAirQuality) {
@@ -368,6 +496,24 @@ export class AirPurifierAccessory {
     await this.device.setState(attribute, rawValue);
   }
 
+  getSwingMode(): CharacteristicValue {
+    return booleanStateValue(this.device.controlState, 'osc') || booleanStateValue(this.device.controlState, 'oscstate')
+      ? this.platform.Characteristic.SwingMode.SWING_ENABLED
+      : this.platform.Characteristic.SwingMode.SWING_DISABLED;
+  }
+
+  async setSwingMode(value: CharacteristicValue) {
+    if (!this.supportsOscillation) {
+      this.platform.log.warn(`[${this.device.name}] Ignoring oscillation change because this device did not report osc support.`);
+      return;
+    }
+
+    const enabled = value === this.platform.Characteristic.SwingMode.SWING_ENABLED;
+    const rawValue = booleanWriteValue(this.device.controlState, 'osc', enabled);
+    this.platform.log.info(`[${this.device.name}] Setting oscillation: homekit=${value}, key=osc, raw=${rawValue}`);
+    await this.device.setState('osc', rawValue);
+  }
+
   getFilterChangeIndication(): CharacteristicValue {
     return this.device.controlState.filterusage !== undefined && this.device.controlState.filterusage >= this.configDev.filterChangeLevel
       ? this.platform.Characteristic.FilterChangeIndication.CHANGE_FILTER
@@ -406,6 +552,50 @@ export class AirPurifierAccessory {
   async setLedBrightness(value: CharacteristicValue) {
     this.platform.log.debug(`[${this.device.name}] Setting LED brightness to ${value}`);
     await this.device.setState('brightness', percentToRaw(Number(value), this.getBrightnessMax()));
+  }
+
+  getDisplayLightOn(): CharacteristicValue {
+    return typeof this.device.controlState.nmbrightness === 'number' && this.device.controlState.nmbrightness > 0;
+  }
+
+  async setDisplayLightOn(value: CharacteristicValue) {
+    if (!this.supportsDisplayLight) {
+      this.platform.log.warn(
+        `[${this.device.name}] Ignoring display light change because this device did not report nmbrightness support.`,
+      );
+      return;
+    }
+
+    if (!value) {
+      this.lastDisplayBrightness = numericStateValue(this.device.controlState, 'nmbrightness') || this.lastDisplayBrightness;
+      this.platform.log.info(`[${this.device.name}] Setting display light: homekit=${value}, key=nmbrightness, raw=0`);
+      await this.device.setState('nmbrightness', 0);
+      return;
+    }
+
+    const rawValue = this.lastDisplayBrightness > 0 ? this.lastDisplayBrightness : this.getDisplayBrightnessMax();
+    this.platform.log.info(`[${this.device.name}] Setting display light: homekit=${value}, key=nmbrightness, raw=${rawValue}`);
+    await this.device.setState('nmbrightness', rawValue);
+  }
+
+  getDisplayBrightness(): CharacteristicValue {
+    return rawToPercent(numericStateValue(this.device.controlState, 'nmbrightness'), this.getDisplayBrightnessMax());
+  }
+
+  async setDisplayBrightness(value: CharacteristicValue) {
+    if (!this.supportsDisplayLight) {
+      this.platform.log.warn(
+        `[${this.device.name}] Ignoring display brightness change because this device did not report nmbrightness support.`,
+      );
+      return;
+    }
+
+    const rawValue = percentToRaw(Number(value), this.getDisplayBrightnessMax());
+    this.platform.log.info(`[${this.device.name}] Setting display brightness: homekit=${value}, key=nmbrightness, raw=${rawValue}`);
+    if (rawValue > 0) {
+      this.lastDisplayBrightness = rawValue;
+    }
+    await this.device.setState('nmbrightness', rawValue);
   }
 
   getPM2_5Density(): CharacteristicValue {
@@ -456,6 +646,116 @@ export class AirPurifierAccessory {
     await this.device.setState('nightmode', value as boolean);
   }
 
+  getSleepTimerOn(): CharacteristicValue {
+    return booleanStateValue(this.device.controlState, 'timstate');
+  }
+
+  async setSleepTimerOn(value: CharacteristicValue) {
+    if (!this.supportsSleepTimer) {
+      this.platform.log.warn(`[${this.device.name}] Ignoring sleep timer change because this device did not report timer support.`);
+      return;
+    }
+
+    const enabled = Boolean(value);
+    if (enabled) {
+      const duration = timerDurationSeconds(this.device.controlState);
+      this.platform.log.info(`[${this.device.name}] Setting sleep timer duration: homekit=${duration}, key=timdur, raw=${duration}`);
+      await this.device.setState('timdur', duration);
+    }
+
+    const rawValue = booleanWriteValue(this.device.controlState, 'timstate', enabled);
+    this.platform.log.info(`[${this.device.name}] Setting sleep timer: homekit=${value}, key=timstate, raw=${rawValue}`);
+    await this.device.setState('timstate', rawValue);
+  }
+
+  getSleepTimerDuration(): CharacteristicValue {
+    return timerDurationSeconds(this.device.controlState);
+  }
+
+  async setSleepTimerDuration(value: CharacteristicValue) {
+    if (!this.supportsSleepTimer) {
+      this.platform.log.warn(`[${this.device.name}] Ignoring sleep timer duration because this device did not report timer support.`);
+      return;
+    }
+
+    const rawValue = nearestTimerPresetSeconds(Number(value));
+    this.platform.log.info(`[${this.device.name}] Setting sleep timer duration: homekit=${value}, key=timdur, raw=${rawValue}`);
+    await this.device.setState('timdur', rawValue);
+  }
+
+  getSleepTimerRemaining(): CharacteristicValue {
+    return timerRemainingSeconds(this.device.controlState);
+  }
+
+  getClimateActive(): CharacteristicValue {
+    return this.getActive();
+  }
+
+  async setClimateActive(value: CharacteristicValue) {
+    await this.setActive(value);
+  }
+
+  getCurrentHeaterCoolerState(): CharacteristicValue {
+    if (this.device.controlState.standby !== false) {
+      return this.platform.Characteristic.CurrentHeaterCoolerState.INACTIVE;
+    }
+
+    switch (numericStateValue(this.device.controlState, 'mainmode')) {
+      case COMFORT_PURE_MAIN_MODE.HEAT:
+        return this.platform.Characteristic.CurrentHeaterCoolerState.HEATING;
+      case COMFORT_PURE_MAIN_MODE.COOL:
+        return this.platform.Characteristic.CurrentHeaterCoolerState.COOLING;
+      default:
+        return this.platform.Characteristic.CurrentHeaterCoolerState.IDLE;
+    }
+  }
+
+  getTargetHeaterCoolerState(): CharacteristicValue {
+    switch (numericStateValue(this.device.controlState, 'mainmode')) {
+      case COMFORT_PURE_MAIN_MODE.HEAT:
+        return this.platform.Characteristic.TargetHeaterCoolerState.HEAT;
+      case COMFORT_PURE_MAIN_MODE.COOL:
+        return this.platform.Characteristic.TargetHeaterCoolerState.COOL;
+      default:
+        return this.platform.Characteristic.TargetHeaterCoolerState.AUTO;
+    }
+  }
+
+  async setTargetHeaterCoolerState(value: CharacteristicValue) {
+    const target =
+      value === this.platform.Characteristic.TargetHeaterCoolerState.HEAT
+        ? COMFORT_PURE_MAIN_MODE.HEAT
+        : value === this.platform.Characteristic.TargetHeaterCoolerState.COOL
+          ? COMFORT_PURE_MAIN_MODE.COOL
+          : COMFORT_PURE_MAIN_MODE.FAN_ONLY;
+
+    this.platform.log.info(`[${this.device.name}] Setting climate mode: homekit=${value}, key=mainmode, raw=${target}`);
+    await this.device.setState('mainmode', target);
+  }
+
+  getHeatingThresholdTemperature(): CharacteristicValue {
+    return blueairTemperatureToCelsius(numericStateValue(this.device.controlState, 'heattemp')) ?? 21;
+  }
+
+  async setHeatingThresholdTemperature(value: CharacteristicValue) {
+    const celsius = clampClimateSetpoint(Number(value));
+    const rawValue = celsiusToBlueairSetpoint(celsius);
+    this.platform.log.info(`[${this.device.name}] Setting heat setpoint: homekit=${value}, key=heattemp, raw=${rawValue}`);
+    await this.device.setState('heattemp', rawValue);
+  }
+
+  getClimateRotationSpeed(): CharacteristicValue {
+    const rawValue = numericStateValue(this.device.controlState, this.getClimateFanSpeedAttribute());
+    return fanRawToPercent(rawValue, this.getFanSpeedSpec());
+  }
+
+  async setClimateRotationSpeed(value: CharacteristicValue) {
+    const attribute = this.getClimateFanSpeedAttribute();
+    const rawValue = fanPercentToRaw(Number(value), this.getFanSpeedSpec());
+    this.platform.log.info(`[${this.device.name}] Setting climate fan speed: homekit=${value}, key=${attribute}, raw=${rawValue}`);
+    await this.device.setState(attribute, rawValue);
+  }
+
   private getFanSpeedSpec(): FanSpeedWriteSpec {
     const attribute = this.getFanSpeedAttribute();
     if (this.configDev.fanSpeedMax && this.configDev.fanSpeedMax > 0) {
@@ -491,6 +791,34 @@ export class AirPurifierAccessory {
     return brightnessMaxForDevice(this.configDev, this.device.getObservedBrightnessMax());
   }
 
+  private getDisplayBrightnessMax(): number {
+    if (this.configDev.displayBrightnessMax && this.configDev.displayBrightnessMax > 0) {
+      return this.configDev.displayBrightnessMax;
+    }
+
+    return this.device.deviceMetadata.displayBrightness?.rawMax ?? 100;
+  }
+
+  private getClimateFanSpeedAttribute(): string {
+    switch (numericStateValue(this.device.controlState, 'mainmode')) {
+      case COMFORT_PURE_MAIN_MODE.HEAT:
+        return this.device.deviceMetadata.climate?.heatFanAttribute ?? 'heatfs';
+      case COMFORT_PURE_MAIN_MODE.COOL:
+        return this.device.deviceMetadata.climate?.coolFanAttribute ?? 'coolfs';
+      default:
+        return this.device.deviceMetadata.climate?.fanFanAttribute ?? 'fsp0';
+    }
+  }
+
+  private shouldExposeComfortPureClimate(): boolean {
+    return (
+      this.configDev.comfortPureClimateMode === 'gated' &&
+      !(this.configDev.disabledServices ?? []).includes('comfortPureClimate') &&
+      Boolean(this.device.deviceMetadata.climate) &&
+      this.device.sensorState.temperature !== undefined
+    );
+  }
+
   private ensureAirQualityService(): void {
     if (this.airQualityService) {
       return;
@@ -511,7 +839,7 @@ export class AirPurifierAccessory {
 
     this.airQualityService = this.accessory.addService(
       this.platform.Service.AirQualitySensor,
-      `${this.device.name} Air Quality`,
+      serviceName(this.configDev.name || this.device.name, 'Air Quality'),
       'AirQuality',
     );
     this.airQualityService.getCharacteristic(this.platform.Characteristic.AirQuality).onGet(this.getAirQuality.bind(this));
@@ -540,7 +868,7 @@ export class AirPurifierAccessory {
 
     this.temperatureService = this.accessory.addService(
       this.platform.Service.TemperatureSensor,
-      `${this.device.name} Temperature`,
+      serviceName(this.configDev.name || this.device.name, 'Temperature'),
       'Temperature',
     );
     this.temperatureService.getCharacteristic(this.platform.Characteristic.CurrentTemperature).onGet(this.getCurrentTemperature.bind(this));
@@ -564,15 +892,82 @@ export class AirPurifierAccessory {
       return;
     }
 
-    this.humidityService = this.accessory.addService(this.platform.Service.HumiditySensor, `${this.device.name} Humidity`, 'Humidity');
+    this.humidityService = this.accessory.addService(
+      this.platform.Service.HumiditySensor,
+      serviceName(this.configDev.name || this.device.name, 'Humidity'),
+      'Humidity',
+    );
     this.humidityService
       .getCharacteristic(this.platform.Characteristic.CurrentRelativeHumidity)
       .onGet(this.getCurrentRelativeHumidity.bind(this));
   }
 
+  private ensureClimateService(): void {
+    if (this.climateService || !this.shouldExposeComfortPureClimate()) {
+      return;
+    }
+
+    this.climateService = this.accessory.addService(
+      this.platform.Service.HeaterCooler,
+      serviceName(this.configDev.name || this.device.name, 'Climate'),
+      'ComfortPureClimate',
+    );
+
+    this.climateService
+      .getCharacteristic(this.platform.Characteristic.Active)
+      .onGet(this.getClimateActive.bind(this))
+      .onSet(this.setClimateActive.bind(this));
+    this.climateService
+      .getCharacteristic(this.platform.Characteristic.CurrentHeaterCoolerState)
+      .onGet(this.getCurrentHeaterCoolerState.bind(this));
+    this.climateService
+      .getCharacteristic(this.platform.Characteristic.TargetHeaterCoolerState)
+      .onGet(this.getTargetHeaterCoolerState.bind(this))
+      .onSet(this.setTargetHeaterCoolerState.bind(this));
+    this.climateService.getCharacteristic(this.platform.Characteristic.CurrentTemperature).onGet(this.getCurrentTemperature.bind(this));
+    this.climateService
+      .getCharacteristic(this.platform.Characteristic.HeatingThresholdTemperature)
+      .setProps({ minValue: 10, maxValue: 35, minStep: 0.5 })
+      .onGet(this.getHeatingThresholdTemperature.bind(this))
+      .onSet(this.setHeatingThresholdTemperature.bind(this));
+    this.climateService
+      .getCharacteristic(this.platform.Characteristic.RotationSpeed)
+      .onGet(this.getClimateRotationSpeed.bind(this))
+      .onSet(this.setClimateRotationSpeed.bind(this));
+
+    if (this.supportsOscillation && !(this.configDev.disabledServices ?? []).includes('oscillation')) {
+      this.climateService
+        .getCharacteristic(this.platform.Characteristic.SwingMode)
+        .onGet(this.getSwingMode.bind(this))
+        .onSet(this.setSwingMode.bind(this));
+    }
+  }
+
+  private updateClimateCharacteristics(): void {
+    if (!this.climateService) {
+      return;
+    }
+
+    this.climateService.updateCharacteristic(this.platform.Characteristic.Active, this.getClimateActive());
+    this.climateService.updateCharacteristic(this.platform.Characteristic.CurrentHeaterCoolerState, this.getCurrentHeaterCoolerState());
+    this.climateService.updateCharacteristic(this.platform.Characteristic.TargetHeaterCoolerState, this.getTargetHeaterCoolerState());
+    this.climateService.updateCharacteristic(this.platform.Characteristic.CurrentTemperature, this.getCurrentTemperature());
+    this.climateService.updateCharacteristic(
+      this.platform.Characteristic.HeatingThresholdTemperature,
+      this.getHeatingThresholdTemperature(),
+    );
+    this.climateService.updateCharacteristic(this.platform.Characteristic.RotationSpeed, this.getClimateRotationSpeed());
+    if (this.supportsOscillation) {
+      this.climateService.updateCharacteristic(this.platform.Characteristic.SwingMode, this.getSwingMode());
+    }
+  }
+
   private removeCharacteristicIfPresent(
     service: Service,
-    characteristic: typeof this.platform.Characteristic.RotationSpeed | typeof this.platform.Characteristic.LockPhysicalControls,
+    characteristic:
+      | typeof this.platform.Characteristic.RotationSpeed
+      | typeof this.platform.Characteristic.LockPhysicalControls
+      | typeof this.platform.Characteristic.SwingMode,
   ) {
     if (service.testCharacteristic(characteristic)) {
       service.removeCharacteristic(service.getCharacteristic(characteristic));

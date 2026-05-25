@@ -16,10 +16,14 @@ export type DeviceCapabilities = {
     autoMode: boolean;
     brightness: boolean;
     childLock: boolean;
+    displayBrightness: boolean;
     filterUsage: boolean;
     fanSpeed: boolean;
     germShield: boolean;
     nightMode: boolean;
+    oscillation: boolean;
+    sleepTimer: boolean;
+    comfortPureClimate: boolean;
   };
 };
 
@@ -51,10 +55,14 @@ export function inferDeviceCapabilities(state: BlueAirDeviceState, sensorData: B
       autoMode: hasValue(state.automode),
       brightness: hasValue(state.brightness),
       childLock: hasValue(state.childlock),
+      displayBrightness: hasValue(state.nmbrightness),
       filterUsage: hasValue(state.filterusage),
       fanSpeed: hasValue(state.fanspeed) || hasValue(state.fsp0),
       germShield: hasValue(state.germshield),
       nightMode: hasValue(state.nightmode),
+      oscillation: hasValue(state.osc),
+      sleepTimer: hasValue(state.timstate) && hasValue(state.timdur),
+      comfortPureClimate: hasValue(state.mainmode),
     },
   };
 }

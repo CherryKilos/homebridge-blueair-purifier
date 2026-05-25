@@ -6,6 +6,7 @@ export type Config = {
     accountUuid: string;
     autoExposeAvailableServices: boolean;
     realtimeSensors: 'auto' | 'off';
+    sensorDiagnostics: boolean;
     sensorProbeEnabled: boolean;
     verboseLogging: boolean;
     uiDebug: boolean;
@@ -13,7 +14,8 @@ export type Config = {
     devices: DeviceConfig[];
 };
 export type TemperatureInputUnit = 'auto' | 'celsius' | 'fahrenheit';
-export type DisabledService = 'led' | 'airQuality' | 'temperature' | 'humidity' | 'germShield' | 'nightMode';
+export type DisabledService = 'led' | 'airQuality' | 'temperature' | 'humidity' | 'germShield' | 'nightMode' | 'displayLight' | 'oscillation' | 'sleepTimer' | 'comfortPureClimate';
+export type ComfortPureClimateMode = 'off' | 'gated';
 export type DeviceConfig = {
     id: string;
     name: string;
@@ -23,6 +25,8 @@ export type DeviceConfig = {
     temperatureInputUnit: TemperatureInputUnit;
     fanSpeedMax: number;
     brightnessMax: number;
+    displayBrightnessMax: number;
+    comfortPureClimateMode: ComfortPureClimateMode;
     disabledServices: DisabledService[];
     led: boolean;
     airQualitySensor: boolean;

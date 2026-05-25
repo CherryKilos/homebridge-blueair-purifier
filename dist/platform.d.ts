@@ -21,6 +21,7 @@ export declare class BlueAirPlatform extends EventEmitter implements DynamicPlat
     getValidDevicesStatus(): Promise<void>;
     getInitialDeviceStates(): Promise<void>;
     startRealtimeSensors(): Promise<void>;
+    private logDeclaredRealtimeSensors;
     private handleRealtimeUpdate;
     addDevice(device: BlueAirDeviceStatus): Promise<void>;
 }

@@ -26,10 +26,14 @@ function inferDeviceCapabilities(state, sensorData) {
             autoMode: hasValue(state.automode),
             brightness: hasValue(state.brightness),
             childLock: hasValue(state.childlock),
+            displayBrightness: hasValue(state.nmbrightness),
             filterUsage: hasValue(state.filterusage),
             fanSpeed: hasValue(state.fanspeed) || hasValue(state.fsp0),
             germShield: hasValue(state.germshield),
             nightMode: hasValue(state.nightmode),
+            oscillation: hasValue(state.osc),
+            sleepTimer: hasValue(state.timstate) && hasValue(state.timdur),
+            comfortPureClimate: hasValue(state.mainmode),
         },
     };
 }

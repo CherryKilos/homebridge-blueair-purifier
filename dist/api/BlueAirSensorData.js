@@ -9,12 +9,13 @@ exports.BlueAirDeviceSensorDataMap = {
     pm10: 'pm10',
     pm2_: 'pm2_5',
     pm2_5: 'pm2_5',
+    rssi: 'rssi',
     t: 'temperature',
     tVOC: 'voc',
     voc: 'voc',
 };
 const STATE_SENSOR_NAMES = new Set(['fsp0', 'fanspeed']);
-const SCALAR_SENSOR_NAMES = new Set(['fanspeed', 'fsp0', 'hcho', 'pm1', 'pm10', 'pm2_', 'pm2_5', 'tVOC', 'voc']);
+const SCALAR_SENSOR_NAMES = new Set(['fanspeed', 'fsp0', 'hcho', 'pm1', 'pm10', 'pm2_', 'pm2_5', 'rssi', 'tVOC', 'voc']);
 function isObject(value) {
     return value !== null && typeof value === 'object' && !Array.isArray(value);
 }

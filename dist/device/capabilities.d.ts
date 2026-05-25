@@ -15,10 +15,14 @@ export type DeviceCapabilities = {
         autoMode: boolean;
         brightness: boolean;
         childLock: boolean;
+        displayBrightness: boolean;
         filterUsage: boolean;
         fanSpeed: boolean;
         germShield: boolean;
         nightMode: boolean;
+        oscillation: boolean;
+        sleepTimer: boolean;
+        comfortPureClimate: boolean;
     };
 };
 export declare function inferDeviceCapabilities(state: BlueAirDeviceState, sensorData: BlueAirDeviceSensorData): DeviceCapabilities;

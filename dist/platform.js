@@ -99,6 +99,7 @@ class BlueAirPlatform extends events_1.default {
             return;
         }
         try {
+            this.logDeclaredRealtimeSensors();
             const mqttAuth = await this.blueAirApi.getMqttAuth();
             if (!mqttAuth) {
                 this.log.warn('Blueair realtime sensor credentials were not returned by the cloud API; continuing with REST polling only.');
@@ -109,6 +110,21 @@ class BlueAirPlatform extends events_1.default {
         }
         catch (error) {
             this.log.warn(`Unable to start Blueair realtime sensors: ${error instanceof Error ? error.message : error}`);
+        }
+    }
+    logDeclaredRealtimeSensors() {
+        for (const device of this.devices) {
+            const declared = device.deviceMetadata.declaredDataSources;
+            const realtime = device.deviceMetadata.declaredRealtimeSensors;
+            const message = `[${device.name}] Declared Blueair realtime sensors: ${realtime.join(',') || 'none'}; ` +
+                `ds=${declared.ds.join(',') || 'none'}; dc=${declared.dc.join(',') || 'none'}; ` +
+                `rt5s=${declared.rt5s.join(',') || 'none'}; rt5m=${declared.rt5m.join(',') || 'none'}; b5m=${declared.b5m.join(',') || 'none'}`;
+            if (this.platformConfig.sensorDiagnostics) {
+                this.log.info(message);
+            }
+            else {
+                this.log.debug(message);
+            }
         }
     }
     handleRealtimeUpdate(update) {

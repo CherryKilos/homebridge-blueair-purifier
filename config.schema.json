@@ -45,7 +45,13 @@
         "description": "Use Blueair AWS IoT realtime sensor streams when REST polling does not include live sensor values.",
         "type": "string",
         "enum": ["auto", "off"],
-        "default": "off"
+        "default": "auto"
+      },
+      "sensorDiagnostics": {
+        "title": "Sensor Diagnostics",
+        "description": "Log extra one-time realtime sensor declarations and payload keys for troubleshooting.",
+        "type": "boolean",
+        "default": false
       },
       "sensorProbeEnabled": {
         "title": "Sensor Probe Enabled",
@@ -116,13 +122,37 @@
               "type": "number",
               "default": 0
             },
+            "displayBrightnessMax": {
+              "title": "Display Brightness Max",
+              "description": "Raw maximum ComfortPure display brightness. Leave 100 unless diagnostics prove otherwise.",
+              "type": "number",
+              "default": 100
+            },
+            "comfortPureClimateMode": {
+              "title": "ComfortPure Climate Mode",
+              "description": "Expose a gated Heater/Cooler service only after real ambient temperature has been received.",
+              "type": "string",
+              "enum": ["off", "gated"],
+              "default": "off"
+            },
             "disabledServices": {
               "title": "Disabled Services",
               "description": "Services to suppress even when auto exposure detects support.",
               "type": "array",
               "items": {
                 "type": "string",
-                "enum": ["led", "airQuality", "temperature", "humidity", "germShield", "nightMode"]
+                "enum": [
+                  "led",
+                  "airQuality",
+                  "temperature",
+                  "humidity",
+                  "germShield",
+                  "nightMode",
+                  "displayLight",
+                  "oscillation",
+                  "sleepTimer",
+                  "comfortPureClimate"
+                ]
               }
             },
             "led": {
@@ -177,6 +207,7 @@
             "accountUuid",
             "autoExposeAvailableServices",
             "realtimeSensors",
+            "sensorDiagnostics",
             "sensorProbeEnabled",
             "verboseLogging",
             "uiDebug",
@@ -196,6 +227,8 @@
             "devices[].temperatureInputUnit",
             "devices[].fanSpeedMax",
             "devices[].brightnessMax",
+            "devices[].displayBrightnessMax",
+            "devices[].comfortPureClimateMode",
             "devices[].disabledServices",
             "devices[].led",
             "devices[].airQualitySensor",

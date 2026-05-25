@@ -35,13 +35,40 @@ const comfortPureDeviceInfo = {
     },
     ds: {
       h: {},
+      pm2_5: {},
+      rt5s: { sn: ['t', 'h', 'pm2_5', 'rssi'] },
+      rt5m: { sn: 'pm10 tVOC' },
+      b5m: { sn: [{ n: 'hcho' }] },
       t: {},
+    },
+    dc: {
+      fsp0: {},
+      nmbrightness: {},
+      osc: {},
+      timdur: {},
     },
   },
   sensordata: [],
   states: [
     { n: 'standby', vb: false, t: 1779663000 },
+    { n: 'brightness', v: 5, t: 1779663000 },
+    { n: 'nmbrightness', v: 50, t: 1779663000 },
+    { n: 'childlock', vb: false, t: 1779663000 },
     { n: 'fsp0', v: 37, t: 1779663000 },
+    { n: 'mainmode', v: 0, t: 1779663000 },
+    { n: 'heatfs', v: 37, t: 1779663000 },
+    { n: 'coolfs', v: 37, t: 1779663000 },
+    { n: 'heatsubmode', v: 1, t: 1779663000 },
+    { n: 'coolsubmode', v: 1, t: 1779663000 },
+    { n: 'apsubmode', v: 1, t: 1779663000 },
+    { n: 'osc', vb: false, t: 1779663000 },
+    { n: 'oscstate', v: 0, t: 1779663000 },
+    { n: 'oscdir', v: 1, t: 1779663000 },
+    { n: 'oscfs', v: 1, t: 1779663000 },
+    { n: 'timstate', v: 0, t: 1779663000 },
+    { n: 'timdur', v: 3600, t: 1779663000 },
+    { n: 'timl', v: 0, t: 1779663000 },
+    { n: 'timts', v: 0, t: 1779663000 },
     { n: 'heattemp', v: 260, t: 1779663000 },
     { n: 'ecoheattemp', v: 260, t: 1779663000 },
     { n: 'tu', v: 1, t: 1779663000 },
@@ -63,7 +90,13 @@ describe('device adapters', () => {
 
     expect(normalized.deviceMetadata.adapterId).toBe('comfort-pure-t10i');
     expect(normalized.deviceMetadata.fanSpeed).toEqual({ attribute: 'fsp0', rawMax: 91, rawValues: [11, 37, 64, 91] });
+    expect(normalized.deviceMetadata.displayBrightness).toEqual({ attribute: 'nmbrightness', rawMax: 100 });
+    expect(normalized.deviceMetadata.oscillation?.attribute).toBe('osc');
+    expect(normalized.deviceMetadata.sleepTimer?.durationAttribute).toBe('timdur');
+    expect(normalized.deviceMetadata.climate?.modeAttribute).toBe('mainmode');
     expect(normalized.controlState.fsp0).toBe(37);
+    expect(normalized.controlState.heattemp).toBe(260);
+    expect(normalized.controlState.ecoheattemp).toBeUndefined();
     expect(normalized.sensorState.temperature).toBeUndefined();
     expect(normalized.sensorState.humidity).toBeUndefined();
   });
@@ -92,5 +125,13 @@ describe('device adapters', () => {
 
     expect(fanPercentToRaw(35, spec)).toBe(37);
     expect(fanRawToPercent(37, spec)).toBe(50);
+  });
+
+  it('captures declared ComfortPure realtime sensor slugs separately from writable controls', () => {
+    const normalized = normalizeRawDeviceInfo(comfortPureDeviceInfo);
+
+    expect(normalized.deviceMetadata.declaredRealtimeSensors).toEqual(['h', 'hcho', 'pm10', 'pm2_5', 'rssi', 't', 'tVOC']);
+    expect(normalized.deviceMetadata.declaredDataSources.dc).toContain('nmbrightness');
+    expect(normalized.deviceMetadata.fieldSources['controlState.nmbrightness']).toBe('states[n=nmbrightness].v');
   });
 });

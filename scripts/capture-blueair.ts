@@ -5,7 +5,9 @@ import path from 'path';
 import { defaultsDeep } from 'lodash';
 import type { Logger } from 'homebridge';
 
-import BlueAirAwsApi from '../src/api/BlueAirAwsApi';
+import BlueAirAwsApi, { BlueAirDeviceStatus } from '../src/api/BlueAirAwsApi';
+import BlueAirRealtimeApi, { BlueAirRealtimeUpdate } from '../src/api/BlueAirRealtimeApi';
+import type { BlueAirMqttAuth } from '../src/api/BlueAirMqttTypes';
 import { Config, defaultConfig } from '../src/platformUtils';
 import { PLATFORM_NAME } from '../src/settings';
 
@@ -26,6 +28,9 @@ const SENSITIVE_KEY_PATTERNS = [
 ];
 
 const PSEUDONYM_KEY_PATTERNS = [/accountUuid/i, /^id$/i, /^mac$/i, /^uuid$/i, /^userId$/i];
+const EMAIL_VALUE_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const UUID_VALUE_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const MAC_VALUE_PATTERN = /^[0-9a-f]{2}(:[0-9a-f]{2}){5}$/i;
 const replacements = new Map<string, string>();
 
 const logger = {
@@ -73,6 +78,22 @@ function redact(value: unknown, key = ''): unknown {
       return '<redacted>';
     }
 
+    if (EMAIL_VALUE_PATTERN.test(value)) {
+      return '<redacted-email>';
+    }
+
+    if (UUID_VALUE_PATTERN.test(value)) {
+      return pseudonymize(value, key || 'uuid');
+    }
+
+    if (MAC_VALUE_PATTERN.test(value)) {
+      return pseudonymize(value, key || 'mac');
+    }
+
+    if (/serial/i.test(key)) {
+      return pseudonymize(value, key);
+    }
+
     if (shouldPseudonymize(key)) {
       return pseudonymize(value, key);
     }
@@ -93,6 +114,100 @@ async function loadPluginConfig(): Promise<Config> {
   return defaultsDeep({}, pluginConfig, defaultConfig) as Config;
 }
 
+function rawShape(value: unknown): Record<string, unknown> {
+  if (Array.isArray(value)) {
+    return {
+      type: 'array',
+      length: value.length,
+      firstKeys: value[0] && typeof value[0] === 'object' ? Object.keys(value[0]) : [],
+    };
+  }
+
+  if (value && typeof value === 'object') {
+    return {
+      type: 'object',
+      keys: Object.keys(value),
+    };
+  }
+
+  return {
+    type: typeof value,
+  };
+}
+
+function adapterStatusSummary(normalizedStatus: BlueAirDeviceStatus[]) {
+  return normalizedStatus.map((device) => ({
+    id: device.id,
+    name: device.name,
+    controlState: device.controlState,
+    sensorState: device.sensorState,
+    adapter: {
+      id: device.deviceMetadata.adapterId,
+      name: device.deviceMetadata.adapterName,
+      fanSpeed: device.deviceMetadata.fanSpeed,
+      displayBrightness: device.deviceMetadata.displayBrightness,
+      oscillation: device.deviceMetadata.oscillation,
+      sleepTimer: device.deviceMetadata.sleepTimer,
+      climate: device.deviceMetadata.climate,
+      fieldSources: device.deviceMetadata.fieldSources,
+      ignoredFields: device.deviceMetadata.ignoredFields,
+    },
+    declaredDataSources: device.deviceMetadata.declaredDataSources,
+    declaredRealtimeSensors: device.deviceMetadata.declaredRealtimeSensors,
+  }));
+}
+
+async function captureRealtimeSamples(mqttAuth: BlueAirMqttAuth | undefined, uuids: string[]) {
+  const timeoutMs = Number(process.env.BLUEAIR_CAPTURE_REALTIME_MS ?? 8000);
+  if (!mqttAuth || !uuids.length || timeoutMs <= 0) {
+    return {
+      timeoutMs,
+      samples: [],
+      note: 'Realtime sample capture skipped.',
+    };
+  }
+
+  return new Promise((resolve) => {
+    const samples: unknown[] = [];
+    const seenDeviceIds = new Set<string>();
+    let done = false;
+
+    const finish = () => {
+      if (done) {
+        return;
+      }
+      done = true;
+      clearTimeout(timer);
+      realtimeApi.stop();
+      resolve({
+        timeoutMs,
+        samples,
+      });
+    };
+
+    const timer = setTimeout(finish, timeoutMs);
+    const realtimeApi = new BlueAirRealtimeApi(mqttAuth, uuids, logger as Logger, (update: BlueAirRealtimeUpdate) => {
+      if (seenDeviceIds.has(update.deviceId)) {
+        return;
+      }
+
+      seenDeviceIds.add(update.deviceId);
+      samples.push({
+        deviceId: update.deviceId,
+        sensorData: update.sensorData,
+        state: update.state,
+        rawShape: rawShape(update.raw),
+        raw: update.raw,
+      });
+
+      if (seenDeviceIds.size >= uuids.length) {
+        finish();
+      }
+    });
+    realtimeApi.start();
+  });
+}
+
 async function main() {
   const config = await loadPluginConfig();
   if (!config.username || !config.password) {
@@ -110,6 +225,7 @@ async function main() {
   const rawInitialState = accountUuid && uuids.length ? await api.getRawDeviceStatus(accountUuid, uuids) : undefined;
   const normalizedStatus = accountUuid && uuids.length ? await api.getDeviceStatus(accountUuid, uuids) : [];
   const mqttAuth = await api.getMqttAuth();
+  const realtimeSampleSummary = await captureRealtimeSamples(mqttAuth, uuids);
   const sensorProbeResults = [];
 
   if (accountUuid) {
@@ -140,7 +256,9 @@ async function main() {
     registeredDevices,
     rawInitialState,
     normalizedStatus,
+    adapterStatus: adapterStatusSummary(normalizedStatus),
     mqttAuth,
+    realtimeSampleSummary,
     sensorProbeResults,
   });
 
