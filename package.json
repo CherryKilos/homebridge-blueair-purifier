@@ -33,6 +33,7 @@
     "test": "vitest run",
     "watch": "npm run build && npm link && nodemon",
     "build": "rimraf ./dist && tsc",
+    "prepare": "npm run build",
     "prepublishOnly": "npm run lint && npm run build",
     "format": "prettier --log-level warn --write \"**/*.ts\" && npm run lint -- --fix"
   },
