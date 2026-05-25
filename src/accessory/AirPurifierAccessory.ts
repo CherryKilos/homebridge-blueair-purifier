@@ -9,6 +9,7 @@ import {
   inferDeviceCapabilities,
   percentToRaw,
   rawToPercent,
+  shouldExposeDetectedService,
   shouldExposeService,
   temperatureToCelsius,
 } from '../device/capabilities';
@@ -102,7 +103,7 @@ export class AirPurifierAccessory {
 
     this.airQualityService = this.accessory.getServiceById(this.platform.Service.AirQualitySensor, 'AirQuality');
     if (
-      shouldExposeService(
+      shouldExposeDetectedService(
         'airQuality',
         this.configDev.airQualitySensor,
         capabilities.sensors.airQuality,
@@ -125,7 +126,7 @@ export class AirPurifierAccessory {
 
     this.temperatureService = this.accessory.getServiceById(this.platform.Service.TemperatureSensor, 'Temperature');
     if (
-      shouldExposeService(
+      shouldExposeDetectedService(
         'temperature',
         this.configDev.temperatureSensor,
         capabilities.sensors.temperature,
@@ -147,7 +148,7 @@ export class AirPurifierAccessory {
 
     this.humidityService = this.accessory.getServiceById(this.platform.Service.HumiditySensor, 'Humidity');
     if (
-      shouldExposeService(
+      shouldExposeDetectedService(
         'humidity',
         this.configDev.humiditySensor,
         capabilities.sensors.humidity,

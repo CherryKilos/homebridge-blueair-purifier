@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.brightnessMaxForDevice = exports.fanSpeedMaxForDevice = exports.temperatureToCelsius = exports.percentToRaw = exports.rawToPercent = exports.resolveBrightnessMax = exports.resolveFanSpeedMax = exports.shouldExposeService = exports.inferDeviceCapabilities = void 0;
+exports.brightnessMaxForDevice = exports.fanSpeedMaxForDevice = exports.temperatureToCelsius = exports.percentToRaw = exports.rawToPercent = exports.resolveBrightnessMax = exports.resolveFanSpeedMax = exports.shouldExposeDetectedService = exports.shouldExposeService = exports.inferDeviceCapabilities = void 0;
 const DEFAULT_FAN_SPEED_MAX = 3;
 const LOW_RANGE_BRIGHTNESS_MAX = 10;
 const PERCENT_MAX = 100;
@@ -41,6 +41,11 @@ function shouldExposeService(service, legacyConfigEnabled, capabilityDetected, a
     return legacyConfigEnabled || (autoExposeAvailableServices && capabilityDetected);
 }
 exports.shouldExposeService = shouldExposeService;
+function shouldExposeDetectedService(service, legacyConfigEnabled, capabilityDetected, autoExposeAvailableServices, disabledServices = []) {
+    return (capabilityDetected &&
+        shouldExposeService(service, legacyConfigEnabled, capabilityDetected, autoExposeAvailableServices, disabledServices));
+}
+exports.shouldExposeDetectedService = shouldExposeDetectedService;
 function resolveFanSpeedMax(configuredMax, observedMax) {
     if (configuredMax && configuredMax > 0) {
         return configuredMax;

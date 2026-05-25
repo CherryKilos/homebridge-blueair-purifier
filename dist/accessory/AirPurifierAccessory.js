@@ -72,7 +72,7 @@ class AirPurifierAccessory {
             this.accessory.removeService(this.ledService);
         }
         this.airQualityService = this.accessory.getServiceById(this.platform.Service.AirQualitySensor, 'AirQuality');
-        if ((0, capabilities_1.shouldExposeService)('airQuality', this.configDev.airQualitySensor, capabilities.sensors.airQuality, autoExposeAvailableServices, disabledServices)) {
+        if ((0, capabilities_1.shouldExposeDetectedService)('airQuality', this.configDev.airQualitySensor, capabilities.sensors.airQuality, autoExposeAvailableServices, disabledServices)) {
             (_c = this.airQualityService) !== null && _c !== void 0 ? _c : (this.airQualityService = this.accessory.addService(this.platform.Service.AirQualitySensor, `${this.device.name} Air Quality`, 'AirQuality'));
             this.airQualityService.getCharacteristic(this.platform.Characteristic.AirQuality).onGet(this.getAirQuality.bind(this));
             this.airQualityService.getCharacteristic(this.platform.Characteristic.PM2_5Density).onGet(this.getPM2_5Density.bind(this));
@@ -83,7 +83,7 @@ class AirPurifierAccessory {
             this.accessory.removeService(this.airQualityService);
         }
         this.temperatureService = this.accessory.getServiceById(this.platform.Service.TemperatureSensor, 'Temperature');
-        if ((0, capabilities_1.shouldExposeService)('temperature', this.configDev.temperatureSensor, capabilities.sensors.temperature, autoExposeAvailableServices, disabledServices)) {
+        if ((0, capabilities_1.shouldExposeDetectedService)('temperature', this.configDev.temperatureSensor, capabilities.sensors.temperature, autoExposeAvailableServices, disabledServices)) {
             (_d = this.temperatureService) !== null && _d !== void 0 ? _d : (this.temperatureService = this.accessory.addService(this.platform.Service.TemperatureSensor, `${this.device.name} Temperature`, 'Temperature'));
             this.temperatureService
                 .getCharacteristic(this.platform.Characteristic.CurrentTemperature)
@@ -93,7 +93,7 @@ class AirPurifierAccessory {
             this.accessory.removeService(this.temperatureService);
         }
         this.humidityService = this.accessory.getServiceById(this.platform.Service.HumiditySensor, 'Humidity');
-        if ((0, capabilities_1.shouldExposeService)('humidity', this.configDev.humiditySensor, capabilities.sensors.humidity, autoExposeAvailableServices, disabledServices)) {
+        if ((0, capabilities_1.shouldExposeDetectedService)('humidity', this.configDev.humiditySensor, capabilities.sensors.humidity, autoExposeAvailableServices, disabledServices)) {
             (_e = this.humidityService) !== null && _e !== void 0 ? _e : (this.humidityService = this.accessory.addService(this.platform.Service.HumiditySensor, `${this.device.name} Humidity`, 'Humidity'));
             this.humidityService
                 .getCharacteristic(this.platform.Characteristic.CurrentRelativeHumidity)

@@ -7,6 +7,7 @@ import {
   rawToPercent,
   resolveBrightnessMax,
   resolveFanSpeedMax,
+  shouldExposeDetectedService,
   shouldExposeService,
   temperatureToCelsius,
 } from '../src/device/capabilities';
@@ -114,6 +115,11 @@ describe('capability inference', () => {
     expect(shouldExposeService('humidity', false, true, true, ['humidity'])).toBe(false);
     expect(shouldExposeService('humidity', false, true, true)).toBe(true);
     expect(shouldExposeService('humidity', true, false, false)).toBe(true);
+  });
+
+  it('does not expose read-only sensor services when no payload value was detected', () => {
+    expect(shouldExposeDetectedService('temperature', true, false, true)).toBe(false);
+    expect(shouldExposeDetectedService('temperature', false, true, true)).toBe(true);
   });
 });
 

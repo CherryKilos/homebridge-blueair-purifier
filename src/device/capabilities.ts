@@ -73,6 +73,19 @@ export function shouldExposeService(
   return legacyConfigEnabled || (autoExposeAvailableServices && capabilityDetected);
 }
 
+export function shouldExposeDetectedService(
+  service: DisabledService,
+  legacyConfigEnabled: boolean,
+  capabilityDetected: boolean,
+  autoExposeAvailableServices: boolean,
+  disabledServices: DisabledService[] = [],
+): boolean {
+  return (
+    capabilityDetected &&
+    shouldExposeService(service, legacyConfigEnabled, capabilityDetected, autoExposeAvailableServices, disabledServices)
+  );
+}
+
 export function resolveFanSpeedMax(configuredMax?: number, observedMax?: number): number {
   if (configuredMax && configuredMax > 0) {
     return configuredMax;
