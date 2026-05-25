@@ -179,6 +179,7 @@ export class BlueAirPlatform extends EventEmitter implements DynamicPlatformPlug
       controlState: {},
       sensorState,
       deviceMetadata: blueAirDevice.deviceMetadata,
+      source: 'realtime',
       state: {},
       sensorData: sensorState,
     });

@@ -193,6 +193,66 @@ describe('BlueAirDevice AQI updates', () => {
     expect(device.controlState.fanspeed).toBe(3);
   });
 
+  it('ignores realtime fan aliases even if they are accidentally emitted upstream', async () => {
+    const device = new BlueAirDevice({
+      id: '<redacted-device-1>',
+      name: 'Blueair Test',
+      controlState: {
+        fanspeed: 3,
+        standby: false,
+      },
+      sensorState: {
+        pm2_5: 1,
+      },
+      deviceMetadata: testDeviceMetadata,
+      state: {
+        fanspeed: 3,
+        standby: false,
+      },
+      sensorData: {
+        pm2_5: 1,
+      },
+    });
+    const updates: Partial<FullBlueAirDeviceState>[] = [];
+
+    device.on('stateUpdated', (changedStates) => updates.push(changedStates));
+    device.emit('update', {
+      id: device.id,
+      name: device.name,
+      controlState: {
+        fanspeed: 29,
+        fsp0: 29,
+      },
+      sensorState: {
+        fanspeed: 29,
+        fsp0: 29,
+        pm2_5: 0,
+      },
+      deviceMetadata: testDeviceMetadata,
+      source: 'realtime',
+      state: {
+        fanspeed: 29,
+        fsp0: 29,
+      },
+      sensorData: {
+        fanspeed: 29,
+        fsp0: 29,
+        pm2_5: 0,
+      },
+    });
+
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(device.controlState.fanspeed).toBe(3);
+    expect(device.controlState.fsp0).toBeUndefined();
+    expect(device.sensorState.fanspeed).toBeUndefined();
+    expect(device.sensorState.fsp0).toBeUndefined();
+    expect(updates[0]).toEqual({
+      pm2_5: 0,
+      aqi: 0,
+    });
+  });
+
   it('recalculates AQI when pm2_5 changes', async () => {
     const device = new BlueAirDevice({
       id: '<redacted-device-1>',

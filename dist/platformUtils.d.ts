@@ -35,6 +35,7 @@ export type DeviceConfig = {
     humiditySensor: boolean;
     germShield: boolean;
     nightMode: boolean;
+    sleepTimer: boolean;
 };
 export declare enum Region {
     EU = "Default (all other regions)",

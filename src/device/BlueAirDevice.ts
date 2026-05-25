@@ -175,8 +175,8 @@ export class BlueAirDevice extends EventEmitter {
   private async updateState(newState: BlueAirDeviceStatus) {
     const changedState: Partial<BlueAirDeviceState> = {};
     const changedSensorData: Partial<BlueAirSensorDataWithAqi> = {};
-    const incomingControlState = newState.controlState ?? newState.state;
-    const incomingSensorState = newState.sensorState ?? newState.sensorData;
+    const incomingControlState = newState.source === 'realtime' ? {} : newState.controlState ?? newState.state;
+    const incomingSensorState = this.sanitizeIncomingSensorState(newState.sensorState ?? newState.sensorData);
 
     this.deviceMetadata = newState.deviceMetadata ?? this.deviceMetadata;
 
@@ -194,6 +194,13 @@ export class BlueAirDevice extends EventEmitter {
       changedSensorData.aqi = this.calculateAqi({ ...this.sensorState, ...changedSensorData });
     }
     await this.notifyStateUpdate(changedState, changedSensorData);
+  }
+
+  private sanitizeIncomingSensorState(sensorState: BlueAirDeviceSensorData): BlueAirDeviceSensorData {
+    const sanitized = { ...sensorState };
+    delete sanitized.fanspeed;
+    delete sanitized.fsp0;
+    return sanitized;
   }
 
   public getObservedFanSpeedMax(): number {

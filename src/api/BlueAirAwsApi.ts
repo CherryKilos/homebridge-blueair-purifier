@@ -75,6 +75,7 @@ export type BlueAirDeviceStatus = {
   controlState: BlueAirDeviceState;
   sensorState: BlueAirDeviceSensorData;
   deviceMetadata: DeviceAdapterMetadata;
+  source?: 'rest' | 'realtime';
   /**
    * Legacy aliases kept for the existing accessory/device code while the plugin
    * transitions to explicit control/sensor state.

@@ -42,6 +42,7 @@ export declare class BlueAirDevice extends EventEmitter {
     setState(attribute: string, value: number | boolean): Promise<void>;
     setLedOn(value: boolean): Promise<void>;
     private updateState;
+    private sanitizeIncomingSensorState;
     getObservedFanSpeedMax(): number;
     getObservedBrightnessMax(): number;
     private updateObservedMaxima;

@@ -278,7 +278,7 @@ export class AirPurifierAccessory {
     }
 
     this.sleepTimerService = this.accessory.getServiceById(this.platform.Service.Valve, 'SleepTimer');
-    if (this.supportsSleepTimer && !disabledServices.includes('sleepTimer')) {
+    if (this.configDev.sleepTimer && this.supportsSleepTimer && !disabledServices.includes('sleepTimer')) {
       const sleepTimerName = serviceName(baseName, 'Sleep Timer');
       this.sleepTimerService ??= this.accessory.addService(this.platform.Service.Valve, sleepTimerName, 'SleepTimer');
       this.sleepTimerService.setCharacteristic(this.platform.Characteristic.Name, sleepTimerName);

@@ -184,6 +184,12 @@
               "title": "Night Mode",
               "description": "Toggles if the night mode switch service is created with the accessory.",
               "type": "boolean"
+            },
+            "sleepTimer": {
+              "title": "Sleep Timer",
+              "description": "Toggles if the ComfortPure sleep timer service is created. Disabled by default because HomeKit renders it as a valve/faucet.",
+              "type": "boolean",
+              "default": false
             }
           }
         }
@@ -235,7 +241,8 @@
             "devices[].temperatureSensor",
             "devices[].humiditySensor",
             "devices[].germShield",
-            "devices[].nightMode"
+            "devices[].nightMode",
+            "devices[].sleepTimer"
           ]
         }
       ]

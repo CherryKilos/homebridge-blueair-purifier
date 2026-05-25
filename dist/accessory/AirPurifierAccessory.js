@@ -182,7 +182,7 @@ class AirPurifierAccessory {
             this.accessory.removeService(legacySleepTimerSwitch);
         }
         this.sleepTimerService = this.accessory.getServiceById(this.platform.Service.Valve, 'SleepTimer');
-        if (this.supportsSleepTimer && !disabledServices.includes('sleepTimer')) {
+        if (this.configDev.sleepTimer && this.supportsSleepTimer && !disabledServices.includes('sleepTimer')) {
             const sleepTimerName = (0, homekitNames_1.serviceName)(baseName, 'Sleep Timer');
             (_j = this.sleepTimerService) !== null && _j !== void 0 ? _j : (this.sleepTimerService = this.accessory.addService(this.platform.Service.Valve, sleepTimerName, 'SleepTimer'));
             this.sleepTimerService.setCharacteristic(this.platform.Characteristic.Name, sleepTimerName);

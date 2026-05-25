@@ -43,5 +43,6 @@ exports.defaultDeviceConfig = {
     humiditySensor: false,
     germShield: false,
     nightMode: false,
+    sleepTimer: false,
 };
 //# sourceMappingURL=platformUtils.js.map

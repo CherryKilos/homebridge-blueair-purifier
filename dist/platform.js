@@ -146,6 +146,7 @@ class BlueAirPlatform extends events_1.default {
             controlState: {},
             sensorState,
             deviceMetadata: blueAirDevice.deviceMetadata,
+            source: 'realtime',
             state: {},
             sensorData: sensorState,
         });
