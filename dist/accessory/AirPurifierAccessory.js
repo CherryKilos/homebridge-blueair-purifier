@@ -9,6 +9,9 @@ class AirPurifierAccessory {
         this.accessory = accessory;
         this.device = device;
         this.configDev = configDev;
+        this.supportsAutoMode = false;
+        this.supportsChildLock = false;
+        this.supportsFanSpeed = false;
         this.accessory
             .getService(this.platform.Service.AccessoryInformation)
             .setCharacteristic(this.platform.Characteristic.Manufacturer, 'BlueAir')
@@ -17,6 +20,9 @@ class AirPurifierAccessory {
         const capabilities = (0, capabilities_1.inferDeviceCapabilities)(this.device.state, this.device.sensorData);
         const autoExposeAvailableServices = this.platform.platformConfig.autoExposeAvailableServices;
         const disabledServices = (_a = this.configDev.disabledServices) !== null && _a !== void 0 ? _a : [];
+        this.supportsAutoMode = capabilities.controls.autoMode;
+        this.supportsChildLock = capabilities.controls.childLock;
+        this.supportsFanSpeed = capabilities.controls.fanSpeed;
         this.service =
             this.accessory.getService(this.platform.Service.AirPurifier) || this.accessory.addService(this.platform.Service.AirPurifier);
         this.service.setCharacteristic(this.platform.Characteristic.Name, this.configDev.name);
@@ -26,14 +32,24 @@ class AirPurifierAccessory {
             .getCharacteristic(this.platform.Characteristic.TargetAirPurifierState)
             .onGet(this.getTargetAirPurifierState.bind(this))
             .onSet(this.setTargetAirPurifierState.bind(this));
-        this.service
-            .getCharacteristic(this.platform.Characteristic.LockPhysicalControls)
-            .onGet(this.getLockPhysicalControls.bind(this))
-            .onSet(this.setLockPhysicalControls.bind(this));
-        this.service
-            .getCharacteristic(this.platform.Characteristic.RotationSpeed)
-            .onGet(this.getRotationSpeed.bind(this))
-            .onSet(this.setRotationSpeed.bind(this));
+        if (this.supportsChildLock) {
+            this.service
+                .getCharacteristic(this.platform.Characteristic.LockPhysicalControls)
+                .onGet(this.getLockPhysicalControls.bind(this))
+                .onSet(this.setLockPhysicalControls.bind(this));
+        }
+        else {
+            this.removeCharacteristicIfPresent(this.service, this.platform.Characteristic.LockPhysicalControls);
+        }
+        if (this.supportsFanSpeed) {
+            this.service
+                .getCharacteristic(this.platform.Characteristic.RotationSpeed)
+                .onGet(this.getRotationSpeed.bind(this))
+                .onSet(this.setRotationSpeed.bind(this));
+        }
+        else {
+            this.removeCharacteristicIfPresent(this.service, this.platform.Characteristic.RotationSpeed);
+        }
         this.filterMaintenanceService =
             this.accessory.getService(this.platform.Service.FilterMaintenance) ||
                 this.accessory.addService(this.platform.Service.FilterMaintenance);
@@ -128,12 +144,16 @@ class AirPurifierAccessory {
                     this.service.updateCharacteristic(this.platform.Characteristic.TargetAirPurifierState, this.getTargetAirPurifierState());
                     break;
                 case 'childlock':
-                    this.service.updateCharacteristic(this.platform.Characteristic.LockPhysicalControls, this.getLockPhysicalControls());
+                    if (this.supportsChildLock) {
+                        this.service.updateCharacteristic(this.platform.Characteristic.LockPhysicalControls, this.getLockPhysicalControls());
+                    }
                     break;
                 case 'fanspeed':
-                    this.service.updateCharacteristic(this.platform.Characteristic.RotationSpeed, this.getRotationSpeed());
-                    this.service.updateCharacteristic(this.platform.Characteristic.Active, this.getActive());
-                    this.service.updateCharacteristic(this.platform.Characteristic.CurrentAirPurifierState, this.getCurrentAirPurifierState());
+                    if (this.supportsFanSpeed) {
+                        this.service.updateCharacteristic(this.platform.Characteristic.RotationSpeed, this.getRotationSpeed());
+                        this.service.updateCharacteristic(this.platform.Characteristic.Active, this.getActive());
+                        this.service.updateCharacteristic(this.platform.Characteristic.CurrentAirPurifierState, this.getCurrentAirPurifierState());
+                    }
                     break;
                 case 'filterusage':
                     (_a = this.filterMaintenanceService) === null || _a === void 0 ? void 0 : _a.updateCharacteristic(this.platform.Characteristic.FilterChangeIndication, this.getFilterChangeIndication());
@@ -172,7 +192,9 @@ class AirPurifierAccessory {
                 this.service.updateCharacteristic(this.platform.Characteristic.Active, this.getActive());
                 this.service.updateCharacteristic(this.platform.Characteristic.CurrentAirPurifierState, this.getCurrentAirPurifierState());
                 this.service.updateCharacteristic(this.platform.Characteristic.TargetAirPurifierState, this.getTargetAirPurifierState());
-                this.service.updateCharacteristic(this.platform.Characteristic.RotationSpeed, this.getRotationSpeed());
+                if (this.supportsFanSpeed) {
+                    this.service.updateCharacteristic(this.platform.Characteristic.RotationSpeed, this.getRotationSpeed());
+                }
                 (_m = this.ledService) === null || _m === void 0 ? void 0 : _m.updateCharacteristic(this.platform.Characteristic.On, this.getLedOn());
                 (_o = this.germShieldService) === null || _o === void 0 ? void 0 : _o.updateCharacteristic(this.platform.Characteristic.On, this.getGermShield());
                 (_p = this.nightModeService) === null || _p === void 0 ? void 0 : _p.updateCharacteristic(this.platform.Characteristic.On, this.getNightMode());
@@ -204,6 +226,10 @@ class AirPurifierAccessory {
     }
     async setTargetAirPurifierState(value) {
         this.platform.log.debug(`[${this.device.name}] Setting target air purifier state to ${value}`);
+        if (!this.supportsAutoMode) {
+            this.platform.log.warn(`[${this.device.name}] Ignoring auto mode change because this device did not report automode support.`);
+            return;
+        }
         await this.device.setState('automode', value === this.platform.Characteristic.TargetAirPurifierState.AUTO);
     }
     getLockPhysicalControls() {
@@ -213,6 +239,10 @@ class AirPurifierAccessory {
     }
     async setLockPhysicalControls(value) {
         this.platform.log.debug(`[${this.device.name}] Setting lock physical controls to ${value}`);
+        if (!this.supportsChildLock) {
+            this.platform.log.warn(`[${this.device.name}] Ignoring child lock change because this device did not report childlock support.`);
+            return;
+        }
         await this.device.setState('childlock', value === this.platform.Characteristic.LockPhysicalControls.CONTROL_LOCK_ENABLED);
     }
     getRotationSpeed() {
@@ -220,6 +250,10 @@ class AirPurifierAccessory {
     }
     async setRotationSpeed(value) {
         this.platform.log.debug(`[${this.device.name}] Setting rotation speed to ${value}`);
+        if (!this.supportsFanSpeed) {
+            this.platform.log.warn(`[${this.device.name}] Ignoring fan speed change because this device did not report fanspeed support.`);
+            return;
+        }
         await this.device.setState('fanspeed', (0, capabilities_1.percentToRaw)(Number(value), this.getFanSpeedMax()));
     }
     getFilterChangeIndication() {
@@ -298,6 +332,11 @@ class AirPurifierAccessory {
     }
     getBrightnessMax() {
         return (0, capabilities_1.brightnessMaxForDevice)(this.configDev, this.device.getObservedBrightnessMax());
+    }
+    removeCharacteristicIfPresent(service, characteristic) {
+        if (service.testCharacteristic(characteristic)) {
+            service.removeCharacteristic(service.getCharacteristic(characteristic));
+        }
     }
 }
 exports.AirPurifierAccessory = AirPurifierAccessory;

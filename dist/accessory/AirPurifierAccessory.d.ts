@@ -16,6 +16,9 @@ export declare class AirPurifierAccessory {
     private humidityService?;
     private germShieldService?;
     private nightModeService?;
+    private supportsAutoMode;
+    private supportsChildLock;
+    private supportsFanSpeed;
     constructor(platform: BlueAirPlatform, accessory: PlatformAccessory, device: BlueAirDevice, configDev: DeviceConfig);
     updateCharacteristics(changedStates: Partial<FullBlueAirDeviceState>): void;
     getActive(): CharacteristicValue;
@@ -45,5 +48,6 @@ export declare class AirPurifierAccessory {
     setNightMode(value: CharacteristicValue): Promise<void>;
     private getFanSpeedMax;
     private getBrightnessMax;
+    private removeCharacteristicIfPresent;
 }
 //# sourceMappingURL=AirPurifierAccessory.d.ts.map
