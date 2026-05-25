@@ -16,12 +16,10 @@ import { FullBlueAirDeviceState } from '../src/api/BlueAirAwsApi';
 const redactedFixtures = {
   comfortPureT10i: {
     state: {
-      automode: true,
       brightness: 5,
       childlock: false,
-      fanspeed: 2,
       filterusage: 12,
-      nightmode: false,
+      fsp0: 37,
       standby: false,
     },
     sensorData: {
@@ -106,6 +104,7 @@ describe('capability inference', () => {
     expect(t10i.sensors.humidity).toBe(true);
     expect(t10i.sensors.temperature).toBe(true);
     expect(t10i.controls.brightness).toBe(true);
+    expect(t10i.controls.fanSpeed).toBe(true);
     expect(pure211.sensors.pm1).toBe(true);
     expect(pure211.sensors.airQuality).toBe(true);
     expect(pure311.controls.germShield).toBe(true);

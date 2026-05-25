@@ -149,6 +149,7 @@ class AirPurifierAccessory {
                     }
                     break;
                 case 'fanspeed':
+                case 'fsp0':
                     if (this.supportsFanSpeed) {
                         this.service.updateCharacteristic(this.platform.Characteristic.RotationSpeed, this.getRotationSpeed());
                         this.service.updateCharacteristic(this.platform.Characteristic.Active, this.getActive());
@@ -213,7 +214,7 @@ class AirPurifierAccessory {
     }
     getCurrentAirPurifierState() {
         if (this.device.state.standby === false) {
-            return this.device.state.automode && this.device.state.fanspeed === 0
+            return this.device.state.automode && this.getFanSpeedValue() === 0
                 ? this.platform.Characteristic.CurrentAirPurifierState.IDLE
                 : this.platform.Characteristic.CurrentAirPurifierState.PURIFYING_AIR;
         }
@@ -246,7 +247,7 @@ class AirPurifierAccessory {
         await this.device.setState('childlock', value === this.platform.Characteristic.LockPhysicalControls.CONTROL_LOCK_ENABLED);
     }
     getRotationSpeed() {
-        return this.device.state.standby === false ? (0, capabilities_1.rawToPercent)(this.device.state.fanspeed, this.getFanSpeedMax()) : 0;
+        return this.device.state.standby === false ? (0, capabilities_1.rawToPercent)(this.getFanSpeedValue(), this.getFanSpeedMax()) : 0;
     }
     async setRotationSpeed(value) {
         this.platform.log.debug(`[${this.device.name}] Setting rotation speed to ${value}`);
@@ -254,7 +255,7 @@ class AirPurifierAccessory {
             this.platform.log.warn(`[${this.device.name}] Ignoring fan speed change because this device did not report fanspeed support.`);
             return;
         }
-        await this.device.setState('fanspeed', (0, capabilities_1.percentToRaw)(Number(value), this.getFanSpeedMax()));
+        await this.device.setState(this.getFanSpeedAttribute(), (0, capabilities_1.percentToRaw)(Number(value), this.getFanSpeedMax()));
     }
     getFilterChangeIndication() {
         return this.device.state.filterusage !== undefined && this.device.state.filterusage >= this.configDev.filterChangeLevel
@@ -329,6 +330,17 @@ class AirPurifierAccessory {
     }
     getFanSpeedMax() {
         return (0, capabilities_1.fanSpeedMaxForDevice)(this.configDev, this.device.getObservedFanSpeedMax());
+    }
+    getFanSpeedValue() {
+        const fanspeed = this.device.state.fanspeed;
+        if (typeof fanspeed === 'number') {
+            return fanspeed;
+        }
+        const fsp0 = this.device.state.fsp0;
+        return typeof fsp0 === 'number' ? fsp0 : undefined;
+    }
+    getFanSpeedAttribute() {
+        return this.device.state.fanspeed !== undefined ? 'fanspeed' : 'fsp0';
     }
     getBrightnessMax() {
         return (0, capabilities_1.brightnessMaxForDevice)(this.configDev, this.device.getObservedBrightnessMax());

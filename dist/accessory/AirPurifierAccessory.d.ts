@@ -47,6 +47,8 @@ export declare class AirPurifierAccessory {
     getNightMode(): CharacteristicValue;
     setNightMode(value: CharacteristicValue): Promise<void>;
     private getFanSpeedMax;
+    private getFanSpeedValue;
+    private getFanSpeedAttribute;
     private getBrightnessMax;
     private removeCharacteristicIfPresent;
 }

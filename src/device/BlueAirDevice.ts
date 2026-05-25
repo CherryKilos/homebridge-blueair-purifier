@@ -189,7 +189,8 @@ export class BlueAirDevice extends EventEmitter {
   }
 
   private updateObservedMaxima(state: Partial<BlueAirDeviceState>, sensorData?: Partial<BlueAirSensorDataWithAqi>) {
-    const fanSpeed = typeof state.fanspeed === 'number' ? state.fanspeed : sensorData?.fanspeed;
+    const rawFsp0 = state.fsp0;
+    const fanSpeed = typeof state.fanspeed === 'number' ? state.fanspeed : typeof rawFsp0 === 'number' ? rawFsp0 : sensorData?.fanspeed;
     if (typeof fanSpeed === 'number' && fanSpeed > this.observedFanSpeedMax) {
       this.observedFanSpeedMax = fanSpeed;
     }

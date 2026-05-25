@@ -227,6 +227,7 @@ export class AirPurifierAccessory {
           }
           break;
         case 'fanspeed':
+        case 'fsp0':
           if (this.supportsFanSpeed) {
             this.service.updateCharacteristic(this.platform.Characteristic.RotationSpeed, this.getRotationSpeed());
             this.service.updateCharacteristic(this.platform.Characteristic.Active, this.getActive());
@@ -302,7 +303,7 @@ export class AirPurifierAccessory {
 
   getCurrentAirPurifierState(): CharacteristicValue {
     if (this.device.state.standby === false) {
-      return this.device.state.automode && this.device.state.fanspeed === 0
+      return this.device.state.automode && this.getFanSpeedValue() === 0
         ? this.platform.Characteristic.CurrentAirPurifierState.IDLE
         : this.platform.Characteristic.CurrentAirPurifierState.PURIFYING_AIR;
     }
@@ -341,7 +342,7 @@ export class AirPurifierAccessory {
   }
 
   getRotationSpeed(): CharacteristicValue {
-    return this.device.state.standby === false ? rawToPercent(this.device.state.fanspeed, this.getFanSpeedMax()) : 0;
+    return this.device.state.standby === false ? rawToPercent(this.getFanSpeedValue(), this.getFanSpeedMax()) : 0;
   }
 
   async setRotationSpeed(value: CharacteristicValue) {
@@ -350,7 +351,7 @@ export class AirPurifierAccessory {
       this.platform.log.warn(`[${this.device.name}] Ignoring fan speed change because this device did not report fanspeed support.`);
       return;
     }
-    await this.device.setState('fanspeed', percentToRaw(Number(value), this.getFanSpeedMax()));
+    await this.device.setState(this.getFanSpeedAttribute(), percentToRaw(Number(value), this.getFanSpeedMax()));
   }
 
   getFilterChangeIndication(): CharacteristicValue {
@@ -439,6 +440,20 @@ export class AirPurifierAccessory {
 
   private getFanSpeedMax(): number {
     return fanSpeedMaxForDevice(this.configDev, this.device.getObservedFanSpeedMax());
+  }
+
+  private getFanSpeedValue(): number | undefined {
+    const fanspeed = this.device.state.fanspeed;
+    if (typeof fanspeed === 'number') {
+      return fanspeed;
+    }
+
+    const fsp0 = this.device.state.fsp0;
+    return typeof fsp0 === 'number' ? fsp0 : undefined;
+  }
+
+  private getFanSpeedAttribute(): string {
+    return this.device.state.fanspeed !== undefined ? 'fanspeed' : 'fsp0';
   }
 
   private getBrightnessMax(): number {

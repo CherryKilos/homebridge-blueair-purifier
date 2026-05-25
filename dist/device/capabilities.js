@@ -27,7 +27,7 @@ function inferDeviceCapabilities(state, sensorData) {
             brightness: hasValue(state.brightness),
             childLock: hasValue(state.childlock),
             filterUsage: hasValue(state.filterusage),
-            fanSpeed: hasValue(state.fanspeed),
+            fanSpeed: hasValue(state.fanspeed) || hasValue(state.fsp0),
             germShield: hasValue(state.germshield),
             nightMode: hasValue(state.nightmode),
         },
