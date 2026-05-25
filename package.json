@@ -28,7 +28,7 @@
   },
   "main": "dist/index.js",
   "scripts": {
-    "capture:blueair": "ts-node scripts/capture-blueair.ts",
+    "capture:blueair": "node scripts/capture-blueair.js",
     "lint": "eslint . --cache --ext .ts",
     "test": "vitest run",
     "watch": "npm run build && npm link && nodemon",
