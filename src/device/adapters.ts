@@ -219,6 +219,7 @@ function splitSourceNames(value: string): string[] {
   return value
     .split(/[,\s]+/)
     .map((entry) => entry.trim())
+    .filter((entry) => BlueAirDeviceSensorDataMap[entry] || entry === 'rssi')
     .filter(Boolean);
 }
 
@@ -239,7 +240,7 @@ function extractSourceNames(value: unknown): string[] {
     return [];
   }
 
-  if (typeof value.n === 'string') {
+  if (typeof value.n === 'string' && (BlueAirDeviceSensorDataMap[value.n] || value.n === 'rssi')) {
     return [value.n];
   }
 

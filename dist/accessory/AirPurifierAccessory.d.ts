@@ -59,8 +59,9 @@ export declare class AirPurifierAccessory {
     setGermShield(value: CharacteristicValue): Promise<void>;
     getNightMode(): CharacteristicValue;
     setNightMode(value: CharacteristicValue): Promise<void>;
-    getSleepTimerOn(): CharacteristicValue;
-    setSleepTimerOn(value: CharacteristicValue): Promise<void>;
+    getSleepTimerActive(): CharacteristicValue;
+    getSleepTimerInUse(): CharacteristicValue;
+    setSleepTimerActive(value: CharacteristicValue): Promise<void>;
     getSleepTimerDuration(): CharacteristicValue;
     setSleepTimerDuration(value: CharacteristicValue): Promise<void>;
     getSleepTimerRemaining(): CharacteristicValue;

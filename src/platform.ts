@@ -142,8 +142,10 @@ export class BlueAirPlatform extends EventEmitter implements DynamicPlatformPlug
     for (const device of this.devices) {
       const declared = device.deviceMetadata.declaredDataSources;
       const realtime = device.deviceMetadata.declaredRealtimeSensors;
+      const streams = ['rt1s', 'rt5s', 'rt5m', 'b5m'].filter((stream) => declared.ds.includes(stream));
       const message =
-        `[${device.name}] Declared Blueair realtime sensors: ${realtime.join(',') || 'none'}; ` +
+        `[${device.name}] Declared Blueair realtime sensor slugs: ${realtime.join(',') || 'none from rt*.sn'}; ` +
+        `streams=${streams.join(',') || 'none'}; ` +
         `ds=${declared.ds.join(',') || 'none'}; dc=${declared.dc.join(',') || 'none'}; ` +
         `rt5s=${declared.rt5s.join(',') || 'none'}; rt5m=${declared.rt5m.join(',') || 'none'}; b5m=${declared.b5m.join(',') || 'none'}`;
 
@@ -161,14 +163,23 @@ export class BlueAirPlatform extends EventEmitter implements DynamicPlatformPlug
       return;
     }
 
+    const sensorState = { ...update.sensorData };
+    if (!this.platformConfig.sensorDiagnostics) {
+      delete sensorState.rssi;
+    }
+
+    if (Object.keys(sensorState).length === 0 && Object.keys(update.state).length === 0) {
+      return;
+    }
+
     blueAirDevice.emit('update', {
       id: blueAirDevice.id,
       name: blueAirDevice.name,
       controlState: update.state,
-      sensorState: update.sensorData,
+      sensorState,
       deviceMetadata: blueAirDevice.deviceMetadata,
       state: update.state,
-      sensorData: update.sensorData,
+      sensorData: sensorState,
     });
   }
 

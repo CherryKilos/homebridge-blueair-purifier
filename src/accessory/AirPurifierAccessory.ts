@@ -129,7 +129,7 @@ export class AirPurifierAccessory {
       const ledName = serviceName(baseName, 'Led');
       this.ledService ??= this.accessory.addService(this.platform.Service.Lightbulb, ledName, 'Led');
       this.ledService.setCharacteristic(this.platform.Characteristic.Name, ledName);
-      this.ledService.setCharacteristic(this.platform.Characteristic.ConfiguredName, ledName);
+      this.removeCharacteristicIfPresent(this.ledService, this.platform.Characteristic.ConfiguredName);
       this.ledService.getCharacteristic(this.platform.Characteristic.On).onGet(this.getLedOn.bind(this)).onSet(this.setLedOn.bind(this));
       this.ledService
         .getCharacteristic(this.platform.Characteristic.Brightness)
@@ -222,7 +222,7 @@ export class AirPurifierAccessory {
       const germShieldName = serviceName(baseName, 'Germ Shield');
       this.germShieldService ??= this.accessory.addService(this.platform.Service.Switch, germShieldName, 'GermShield');
       this.germShieldService.setCharacteristic(this.platform.Characteristic.Name, germShieldName);
-      this.germShieldService.setCharacteristic(this.platform.Characteristic.ConfiguredName, germShieldName);
+      this.removeCharacteristicIfPresent(this.germShieldService, this.platform.Characteristic.ConfiguredName);
       this.germShieldService
         .getCharacteristic(this.platform.Characteristic.On)
         .onGet(this.getGermShield.bind(this))
@@ -244,7 +244,7 @@ export class AirPurifierAccessory {
       const nightModeName = serviceName(baseName, 'Night Mode');
       this.nightModeService ??= this.accessory.addService(this.platform.Service.Switch, nightModeName, 'NightMode');
       this.nightModeService.setCharacteristic(this.platform.Characteristic.Name, nightModeName);
-      this.nightModeService.setCharacteristic(this.platform.Characteristic.ConfiguredName, nightModeName);
+      this.removeCharacteristicIfPresent(this.nightModeService, this.platform.Characteristic.ConfiguredName);
       this.nightModeService
         .getCharacteristic(this.platform.Characteristic.On)
         .onGet(this.getNightMode.bind(this))
@@ -258,7 +258,7 @@ export class AirPurifierAccessory {
       const displayName = serviceName(baseName, 'Display');
       this.displayLightService ??= this.accessory.addService(this.platform.Service.Lightbulb, displayName, 'DisplayLight');
       this.displayLightService.setCharacteristic(this.platform.Characteristic.Name, displayName);
-      this.displayLightService.setCharacteristic(this.platform.Characteristic.ConfiguredName, displayName);
+      this.removeCharacteristicIfPresent(this.displayLightService, this.platform.Characteristic.ConfiguredName);
       this.displayLightService
         .getCharacteristic(this.platform.Characteristic.On)
         .onGet(this.getDisplayLightOn.bind(this))
@@ -272,19 +272,28 @@ export class AirPurifierAccessory {
       this.displayLightService = undefined;
     }
 
-    this.sleepTimerService = this.accessory.getServiceById(this.platform.Service.Switch, 'SleepTimer');
+    const legacySleepTimerSwitch = this.accessory.getServiceById(this.platform.Service.Switch, 'SleepTimer');
+    if (legacySleepTimerSwitch) {
+      this.accessory.removeService(legacySleepTimerSwitch);
+    }
+
+    this.sleepTimerService = this.accessory.getServiceById(this.platform.Service.Valve, 'SleepTimer');
     if (this.supportsSleepTimer && !disabledServices.includes('sleepTimer')) {
       const sleepTimerName = serviceName(baseName, 'Sleep Timer');
-      this.sleepTimerService ??= this.accessory.addService(this.platform.Service.Switch, sleepTimerName, 'SleepTimer');
+      this.sleepTimerService ??= this.accessory.addService(this.platform.Service.Valve, sleepTimerName, 'SleepTimer');
       this.sleepTimerService.setCharacteristic(this.platform.Characteristic.Name, sleepTimerName);
-      this.sleepTimerService.setCharacteristic(this.platform.Characteristic.ConfiguredName, sleepTimerName);
+      this.sleepTimerService.setCharacteristic(
+        this.platform.Characteristic.ValveType,
+        this.platform.Characteristic.ValveType.GENERIC_VALVE,
+      );
       this.sleepTimerService
-        .getCharacteristic(this.platform.Characteristic.On)
-        .onGet(this.getSleepTimerOn.bind(this))
-        .onSet(this.setSleepTimerOn.bind(this));
+        .getCharacteristic(this.platform.Characteristic.Active)
+        .onGet(this.getSleepTimerActive.bind(this))
+        .onSet(this.setSleepTimerActive.bind(this));
+      this.sleepTimerService.getCharacteristic(this.platform.Characteristic.InUse).onGet(this.getSleepTimerInUse.bind(this));
       this.sleepTimerService
         .getCharacteristic(this.platform.Characteristic.SetDuration)
-        .setProps({ minValue: 30 * 60, maxValue: 4 * 60 * 60, minStep: 30 * 60 })
+        .setProps({ minValue: 0, maxValue: 4 * 60 * 60, minStep: 30 * 60 })
         .onGet(this.getSleepTimerDuration.bind(this))
         .onSet(this.setSleepTimerDuration.bind(this));
       this.sleepTimerService
@@ -393,7 +402,8 @@ export class AirPurifierAccessory {
         case 'timdur':
         case 'timl':
         case 'timts':
-          this.sleepTimerService?.updateCharacteristic(this.platform.Characteristic.On, this.getSleepTimerOn());
+          this.sleepTimerService?.updateCharacteristic(this.platform.Characteristic.Active, this.getSleepTimerActive());
+          this.sleepTimerService?.updateCharacteristic(this.platform.Characteristic.InUse, this.getSleepTimerInUse());
           this.sleepTimerService?.updateCharacteristic(this.platform.Characteristic.SetDuration, this.getSleepTimerDuration());
           this.sleepTimerService?.updateCharacteristic(this.platform.Characteristic.RemainingDuration, this.getSleepTimerRemaining());
           break;
@@ -646,17 +656,25 @@ export class AirPurifierAccessory {
     await this.device.setState('nightmode', value as boolean);
   }
 
-  getSleepTimerOn(): CharacteristicValue {
-    return booleanStateValue(this.device.controlState, 'timstate');
+  getSleepTimerActive(): CharacteristicValue {
+    return booleanStateValue(this.device.controlState, 'timstate')
+      ? this.platform.Characteristic.Active.ACTIVE
+      : this.platform.Characteristic.Active.INACTIVE;
   }
 
-  async setSleepTimerOn(value: CharacteristicValue) {
+  getSleepTimerInUse(): CharacteristicValue {
+    return booleanStateValue(this.device.controlState, 'timstate')
+      ? this.platform.Characteristic.InUse.IN_USE
+      : this.platform.Characteristic.InUse.NOT_IN_USE;
+  }
+
+  async setSleepTimerActive(value: CharacteristicValue) {
     if (!this.supportsSleepTimer) {
       this.platform.log.warn(`[${this.device.name}] Ignoring sleep timer change because this device did not report timer support.`);
       return;
     }
 
-    const enabled = Boolean(value);
+    const enabled = value === this.platform.Characteristic.Active.ACTIVE;
     if (enabled) {
       const duration = timerDurationSeconds(this.device.controlState);
       this.platform.log.info(`[${this.device.name}] Setting sleep timer duration: homekit=${duration}, key=timdur, raw=${duration}`);
@@ -967,7 +985,8 @@ export class AirPurifierAccessory {
     characteristic:
       | typeof this.platform.Characteristic.RotationSpeed
       | typeof this.platform.Characteristic.LockPhysicalControls
-      | typeof this.platform.Characteristic.SwingMode,
+      | typeof this.platform.Characteristic.SwingMode
+      | typeof this.platform.Characteristic.ConfiguredName,
   ) {
     if (service.testCharacteristic(characteristic)) {
       service.removeCharacteristic(service.getCharacteristic(characteristic));

@@ -107,6 +107,7 @@ function splitSourceNames(value) {
     return value
         .split(/[,\s]+/)
         .map((entry) => entry.trim())
+        .filter((entry) => BlueAirSensorData_1.BlueAirDeviceSensorDataMap[entry] || entry === 'rssi')
         .filter(Boolean);
 }
 function extractSourceNames(value) {
@@ -122,7 +123,7 @@ function extractSourceNames(value) {
     if (!isRecord(value)) {
         return [];
     }
-    if (typeof value.n === 'string') {
+    if (typeof value.n === 'string' && (BlueAirSensorData_1.BlueAirDeviceSensorDataMap[value.n] || value.n === 'rssi')) {
         return [value.n];
     }
     if (value.sn !== undefined) {
