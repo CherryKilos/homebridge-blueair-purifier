@@ -59,11 +59,12 @@ function realtimeSubscriptionTopics(deviceIds) {
 }
 exports.realtimeSubscriptionTopics = realtimeSubscriptionTopics;
 class BlueAirRealtimeApi {
-    constructor(auth, deviceIds, logger, onUpdate) {
+    constructor(auth, deviceIds, logger, onUpdate, diagnosticsEnabled = false) {
         this.auth = auth;
         this.deviceIds = deviceIds;
         this.logger = logger;
         this.onUpdate = onUpdate;
+        this.diagnosticsEnabled = diagnosticsEnabled;
         this.closeTimes = [];
         this.messagesReceived = 0;
         this.stopping = false;
@@ -147,7 +148,7 @@ class BlueAirRealtimeApi {
         this.resubscribeTimer = setInterval(() => this.subscribe(), 15 * 60 * 1000);
     }
     logFirstPayloadKeys(topic, update) {
-        if (this.loggedFirstPayloadKeys.has(update.deviceId)) {
+        if (!this.diagnosticsEnabled || this.loggedFirstPayloadKeys.has(update.deviceId)) {
             return;
         }
         this.loggedFirstPayloadKeys.add(update.deviceId);

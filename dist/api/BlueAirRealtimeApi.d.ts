@@ -15,13 +15,14 @@ export default class BlueAirRealtimeApi {
     private readonly deviceIds;
     private readonly logger;
     private readonly onUpdate;
+    private readonly diagnosticsEnabled;
     private client?;
     private resubscribeTimer?;
     private closeTimes;
     private messagesReceived;
     private stopping;
     private loggedFirstPayloadKeys;
-    constructor(auth: BlueAirMqttAuth, deviceIds: string[], logger: Logger, onUpdate: (update: BlueAirRealtimeUpdate) => void);
+    constructor(auth: BlueAirMqttAuth, deviceIds: string[], logger: Logger, onUpdate: (update: BlueAirRealtimeUpdate) => void, diagnosticsEnabled?: boolean);
     start(): void;
     stop(): void;
     private subscribe;

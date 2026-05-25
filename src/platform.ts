@@ -119,7 +119,9 @@ export class BlueAirPlatform extends EventEmitter implements DynamicPlatformPlug
     }
 
     try {
-      this.logDeclaredRealtimeSensors();
+      if (this.platformConfig.sensorDiagnostics) {
+        this.logDeclaredRealtimeSensors();
+      }
       const mqttAuth = await this.blueAirApi.getMqttAuth();
       if (!mqttAuth) {
         this.log.warn('Blueair realtime sensor credentials were not returned by the cloud API; continuing with REST polling only.');
@@ -131,6 +133,7 @@ export class BlueAirPlatform extends EventEmitter implements DynamicPlatformPlug
         this.devices.map((device) => device.id),
         this.log,
         (update) => this.handleRealtimeUpdate(update),
+        this.platformConfig.sensorDiagnostics,
       );
       this.realtimeApi.start();
     } catch (error) {
@@ -149,11 +152,7 @@ export class BlueAirPlatform extends EventEmitter implements DynamicPlatformPlug
         `ds=${declared.ds.join(',') || 'none'}; dc=${declared.dc.join(',') || 'none'}; ` +
         `rt5s=${declared.rt5s.join(',') || 'none'}; rt5m=${declared.rt5m.join(',') || 'none'}; b5m=${declared.b5m.join(',') || 'none'}`;
 
-      if (this.platformConfig.sensorDiagnostics) {
-        this.log.info(message);
-      } else {
-        this.log.debug(message);
-      }
+      this.log.info(message);
     }
   }
 

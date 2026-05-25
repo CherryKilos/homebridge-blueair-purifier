@@ -94,6 +94,7 @@ export default class BlueAirRealtimeApi {
     private readonly deviceIds: string[],
     private readonly logger: Logger,
     private readonly onUpdate: (update: BlueAirRealtimeUpdate) => void,
+    private readonly diagnosticsEnabled = false,
   ) {}
 
   start(): void {
@@ -182,7 +183,7 @@ export default class BlueAirRealtimeApi {
   }
 
   private logFirstPayloadKeys(topic: string, update: BlueAirRealtimeUpdate): void {
-    if (this.loggedFirstPayloadKeys.has(update.deviceId)) {
+    if (!this.diagnosticsEnabled || this.loggedFirstPayloadKeys.has(update.deviceId)) {
       return;
     }
 
