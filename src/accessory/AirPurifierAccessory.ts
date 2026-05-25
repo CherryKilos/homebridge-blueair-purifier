@@ -5,7 +5,7 @@ import { DeviceConfig } from '../platformUtils';
 import { FullBlueAirDeviceState } from '../api/BlueAirAwsApi';
 import {
   brightnessMaxForDevice,
-  fanSpeedMaxForDevice,
+  fanSpeedMaxForWritableState,
   inferDeviceCapabilities,
   percentToRaw,
   rawToPercent,
@@ -447,7 +447,12 @@ export class AirPurifierAccessory {
   }
 
   private getFanSpeedMax(): number {
-    return fanSpeedMaxForDevice(this.configDev, this.device.getObservedFanSpeedMax());
+    return fanSpeedMaxForWritableState(
+      this.configDev,
+      this.device.state,
+      this.getFanSpeedAttribute(),
+      this.device.getObservedFanSpeedMax(),
+    );
   }
 
   private getFanSpeedValue(): number | undefined {
@@ -460,7 +465,7 @@ export class AirPurifierAccessory {
     return typeof fsp0 === 'number' ? fsp0 : undefined;
   }
 
-  private getFanSpeedAttribute(): string {
+  private getFanSpeedAttribute(): 'fanspeed' | 'fsp0' {
     return this.device.state.fanspeed !== undefined ? 'fanspeed' : 'fsp0';
   }
 

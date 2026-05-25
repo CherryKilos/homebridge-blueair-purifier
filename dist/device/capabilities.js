@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.brightnessMaxForDevice = exports.fanSpeedMaxForDevice = exports.temperatureToCelsius = exports.percentToRaw = exports.rawToPercent = exports.resolveBrightnessMax = exports.resolveFanSpeedMax = exports.shouldExposeDetectedService = exports.shouldExposeService = exports.inferDeviceCapabilities = void 0;
+exports.brightnessMaxForDevice = exports.fanSpeedMaxForWritableState = exports.fanSpeedMaxForDevice = exports.temperatureToCelsius = exports.percentToRaw = exports.rawToPercent = exports.resolveBrightnessMax = exports.resolveFanSpeedMax = exports.shouldExposeDetectedService = exports.shouldExposeService = exports.inferDeviceCapabilities = void 0;
 const DEFAULT_FAN_SPEED_MAX = 3;
 const LOW_RANGE_BRIGHTNESS_MAX = 10;
 const PERCENT_MAX = 100;
@@ -101,6 +101,18 @@ function fanSpeedMaxForDevice(config, observedMax) {
     return resolveFanSpeedMax(config.fanSpeedMax, observedMax);
 }
 exports.fanSpeedMaxForDevice = fanSpeedMaxForDevice;
+function fanSpeedMaxForWritableState(config, state, writableAttribute, observedMax) {
+    if (config.fanSpeedMax && config.fanSpeedMax > 0) {
+        return config.fanSpeedMax;
+    }
+    const writableValue = state[writableAttribute];
+    const writableObservedMax = typeof writableValue === 'number' ? writableValue : undefined;
+    if (writableAttribute === 'fanspeed') {
+        return resolveFanSpeedMax(undefined, writableObservedMax);
+    }
+    return resolveFanSpeedMax(undefined, writableObservedMax !== null && writableObservedMax !== void 0 ? writableObservedMax : observedMax);
+}
+exports.fanSpeedMaxForWritableState = fanSpeedMaxForWritableState;
 function brightnessMaxForDevice(config, observedMax) {
     return resolveBrightnessMax(config.brightnessMax, observedMax);
 }

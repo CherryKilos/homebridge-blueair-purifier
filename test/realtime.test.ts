@@ -87,6 +87,17 @@ describe('Blueair REST telemetry parser', () => {
     expect(sensorData.fanspeed).toBe(37);
   });
 
+  it('does not treat arbitrary scalar t keys as temperature readings', () => {
+    const response = {
+      diagnostics: {
+        t: 10,
+      },
+    };
+
+    const sensorData = readingsToSensorData(collectSensorReadings(response));
+    expect(sensorData.temperature).toBeUndefined();
+  });
+
   it('extracts t/h sensor readings from nested historical responses', () => {
     const response = {
       data: [

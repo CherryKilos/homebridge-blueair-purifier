@@ -14,6 +14,7 @@ exports.BlueAirDeviceSensorDataMap = {
     voc: 'voc',
 };
 const STATE_SENSOR_NAMES = new Set(['fsp0', 'fanspeed']);
+const SCALAR_SENSOR_NAMES = new Set(['fanspeed', 'fsp0', 'hcho', 'pm1', 'pm10', 'pm2_', 'pm2_5', 'tVOC', 'voc']);
 function isObject(value) {
     return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
@@ -21,12 +22,12 @@ function isSensorReading(value) {
     return isObject(value) && typeof value.n === 'string' && ('v' in value || 'vb' in value);
 }
 function collectSensorReadings(value, key = '') {
-    if (typeof value === 'number' && exports.BlueAirDeviceSensorDataMap[key]) {
+    if (typeof value === 'number' && SCALAR_SENSOR_NAMES.has(key)) {
         return [{ n: key, v: value }];
     }
     if (Array.isArray(value)) {
         return value.flatMap((entry) => {
-            if (typeof entry === 'number' && exports.BlueAirDeviceSensorDataMap[key]) {
+            if (typeof entry === 'number' && SCALAR_SENSOR_NAMES.has(key)) {
                 return [{ n: key, v: entry }];
             }
             if (isObject(entry) && exports.BlueAirDeviceSensorDataMap[key] && typeof entry.v === 'number') {

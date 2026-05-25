@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { BlueAirDevice } from '../src/device/BlueAirDevice';
 import {
+  fanSpeedMaxForWritableState,
   inferDeviceCapabilities,
   percentToRaw,
   rawToPercent,
@@ -12,6 +13,7 @@ import {
   temperatureToCelsius,
 } from '../src/device/capabilities';
 import { FullBlueAirDeviceState } from '../src/api/BlueAirAwsApi';
+import { defaultDeviceConfig } from '../src/platformUtils';
 
 const redactedFixtures = {
   comfortPureT10i: {
@@ -91,6 +93,41 @@ describe('normalization helpers', () => {
     expect(rawToPercent(2, 4)).toBe(50);
     expect(percentToRaw(50, 4)).toBe(2);
     expect(percentToRaw(1, 3)).toBe(1);
+  });
+
+  it('keeps discrete fanspeed writes on the discrete scale when realtime fsp0 is observed', () => {
+    const max = fanSpeedMaxForWritableState(
+      {
+        ...defaultDeviceConfig,
+        fanSpeedMax: 0,
+      },
+      {
+        fanspeed: 2,
+        fsp0: 35,
+      },
+      'fanspeed',
+      35,
+    );
+
+    expect(max).toBe(3);
+    expect(percentToRaw(35, max)).toBe(1);
+  });
+
+  it('keeps fsp0 writes on the percent-like scale for ComfortPure', () => {
+    const max = fanSpeedMaxForWritableState(
+      {
+        ...defaultDeviceConfig,
+        fanSpeedMax: 0,
+      },
+      {
+        fsp0: 37,
+      },
+      'fsp0',
+      37,
+    );
+
+    expect(max).toBe(100);
+    expect(percentToRaw(35, max)).toBe(35);
   });
 
   it('maps low-range brightness values to HomeKit percentages and back', () => {

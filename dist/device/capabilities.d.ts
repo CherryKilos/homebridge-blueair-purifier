@@ -30,5 +30,6 @@ export declare function rawToPercent(rawValue: number | undefined, rawMax: numbe
 export declare function percentToRaw(percentValue: number, rawMax: number): number;
 export declare function temperatureToCelsius(value: number | undefined, inputUnit?: TemperatureInputUnit): number;
 export declare function fanSpeedMaxForDevice(config: DeviceConfig, observedMax: number): number;
+export declare function fanSpeedMaxForWritableState(config: DeviceConfig, state: BlueAirDeviceState, writableAttribute: 'fanspeed' | 'fsp0', observedMax: number): number;
 export declare function brightnessMaxForDevice(config: DeviceConfig, observedMax: number): number;
 //# sourceMappingURL=capabilities.d.ts.map

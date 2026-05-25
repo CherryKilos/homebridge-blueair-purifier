@@ -337,7 +337,7 @@ class AirPurifierAccessory {
         await this.device.setState('nightmode', value);
     }
     getFanSpeedMax() {
-        return (0, capabilities_1.fanSpeedMaxForDevice)(this.configDev, this.device.getObservedFanSpeedMax());
+        return (0, capabilities_1.fanSpeedMaxForWritableState)(this.configDev, this.device.state, this.getFanSpeedAttribute(), this.device.getObservedFanSpeedMax());
     }
     getFanSpeedValue() {
         const fanspeed = this.device.state.fanspeed;

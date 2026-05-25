@@ -152,6 +152,25 @@ export function fanSpeedMaxForDevice(config: DeviceConfig, observedMax: number):
   return resolveFanSpeedMax(config.fanSpeedMax, observedMax);
 }
 
+export function fanSpeedMaxForWritableState(
+  config: DeviceConfig,
+  state: BlueAirDeviceState,
+  writableAttribute: 'fanspeed' | 'fsp0',
+  observedMax: number,
+): number {
+  if (config.fanSpeedMax && config.fanSpeedMax > 0) {
+    return config.fanSpeedMax;
+  }
+
+  const writableValue = state[writableAttribute];
+  const writableObservedMax = typeof writableValue === 'number' ? writableValue : undefined;
+  if (writableAttribute === 'fanspeed') {
+    return resolveFanSpeedMax(undefined, writableObservedMax);
+  }
+
+  return resolveFanSpeedMax(undefined, writableObservedMax ?? observedMax);
+}
+
 export function brightnessMaxForDevice(config: DeviceConfig, observedMax: number): number {
   return resolveBrightnessMax(config.brightnessMax, observedMax);
 }
