@@ -21,7 +21,10 @@ import {
   booleanWriteValue,
   celsiusToBlueairSetpoint,
   clampClimateSetpoint,
+  COMFORT_PURE_DISPLAY_OFF_FLOOR,
   COMFORT_PURE_MAIN_MODE,
+  displayBrightnessIsOn,
+  displayBrightnessToPercent,
   nearestTimerPresetSeconds,
   numericStateValue,
   timerDurationSeconds,
@@ -71,9 +74,10 @@ export class AirPurifierAccessory {
     this.supportsDisplayLight = Boolean(this.device.deviceMetadata.displayBrightness);
     this.supportsOscillation = Boolean(this.device.deviceMetadata.oscillation);
     this.supportsSleepTimer = Boolean(this.device.deviceMetadata.sleepTimer);
+    const displayBrightness = numericStateValue(this.device.controlState, 'nmbrightness');
     this.lastDisplayBrightness =
-      typeof this.device.controlState.nmbrightness === 'number' && this.device.controlState.nmbrightness > 0
-        ? this.device.controlState.nmbrightness
+      displayBrightness !== undefined && displayBrightnessIsOn(displayBrightness, this.getDisplayBrightnessOffFloor())
+        ? displayBrightness
         : this.getDisplayBrightnessMax();
 
     this.service =
@@ -578,7 +582,8 @@ export class AirPurifierAccessory {
   }
 
   getDisplayLightOn(): CharacteristicValue {
-    return typeof this.device.controlState.nmbrightness === 'number' && this.device.controlState.nmbrightness > 0;
+    const rawValue = numericStateValue(this.device.controlState, 'nmbrightness');
+    return displayBrightnessIsOn(rawValue, this.getDisplayBrightnessOffFloor());
   }
 
   async setDisplayLightOn(value: CharacteristicValue) {
@@ -590,7 +595,10 @@ export class AirPurifierAccessory {
     }
 
     if (!value) {
-      this.lastDisplayBrightness = numericStateValue(this.device.controlState, 'nmbrightness') || this.lastDisplayBrightness;
+      const currentBrightness = numericStateValue(this.device.controlState, 'nmbrightness');
+      if (currentBrightness !== undefined && displayBrightnessIsOn(currentBrightness, this.getDisplayBrightnessOffFloor())) {
+        this.lastDisplayBrightness = currentBrightness;
+      }
       this.platform.log.info(`[${this.device.name}] Setting display light: homekit=${value}, key=nmbrightness, raw=0`);
       await this.device.setState('nmbrightness', 0);
       return;
@@ -602,7 +610,8 @@ export class AirPurifierAccessory {
   }
 
   getDisplayBrightness(): CharacteristicValue {
-    return rawToPercent(numericStateValue(this.device.controlState, 'nmbrightness'), this.getDisplayBrightnessMax());
+    const rawValue = numericStateValue(this.device.controlState, 'nmbrightness');
+    return displayBrightnessToPercent(rawValue, this.getDisplayBrightnessMax(), this.getDisplayBrightnessOffFloor());
   }
 
   async setDisplayBrightness(value: CharacteristicValue) {
@@ -828,6 +837,10 @@ export class AirPurifierAccessory {
     }
 
     return this.device.deviceMetadata.displayBrightness?.rawMax ?? 100;
+  }
+
+  private getDisplayBrightnessOffFloor(): number {
+    return this.device.deviceMetadata.adapterId === 'comfort-pure-t10i' ? COMFORT_PURE_DISPLAY_OFF_FLOOR : 0;
   }
 
   private getClimateFanSpeedAttribute(): string {

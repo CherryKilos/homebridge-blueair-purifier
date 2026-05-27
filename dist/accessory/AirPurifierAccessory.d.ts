@@ -79,6 +79,7 @@ export declare class AirPurifierAccessory {
     private getFanSpeedAttribute;
     private getBrightnessMax;
     private getDisplayBrightnessMax;
+    private getDisplayBrightnessOffFloor;
     private getClimateFanSpeedAttribute;
     private shouldExposeComfortPureClimate;
     private ensureAirQualityService;

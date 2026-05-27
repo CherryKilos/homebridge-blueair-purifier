@@ -35,9 +35,10 @@ class AirPurifierAccessory {
         this.supportsDisplayLight = Boolean(this.device.deviceMetadata.displayBrightness);
         this.supportsOscillation = Boolean(this.device.deviceMetadata.oscillation);
         this.supportsSleepTimer = Boolean(this.device.deviceMetadata.sleepTimer);
+        const displayBrightness = (0, comfortPureControls_1.numericStateValue)(this.device.controlState, 'nmbrightness');
         this.lastDisplayBrightness =
-            typeof this.device.controlState.nmbrightness === 'number' && this.device.controlState.nmbrightness > 0
-                ? this.device.controlState.nmbrightness
+            displayBrightness !== undefined && (0, comfortPureControls_1.displayBrightnessIsOn)(displayBrightness, this.getDisplayBrightnessOffFloor())
+                ? displayBrightness
                 : this.getDisplayBrightnessMax();
         this.service =
             this.accessory.getService(this.platform.Service.AirPurifier) || this.accessory.addService(this.platform.Service.AirPurifier);
@@ -436,7 +437,8 @@ class AirPurifierAccessory {
         await this.device.setState('brightness', (0, capabilities_1.percentToRaw)(Number(value), this.getBrightnessMax()));
     }
     getDisplayLightOn() {
-        return typeof this.device.controlState.nmbrightness === 'number' && this.device.controlState.nmbrightness > 0;
+        const rawValue = (0, comfortPureControls_1.numericStateValue)(this.device.controlState, 'nmbrightness');
+        return (0, comfortPureControls_1.displayBrightnessIsOn)(rawValue, this.getDisplayBrightnessOffFloor());
     }
     async setDisplayLightOn(value) {
         if (!this.supportsDisplayLight) {
@@ -444,7 +446,10 @@ class AirPurifierAccessory {
             return;
         }
         if (!value) {
-            this.lastDisplayBrightness = (0, comfortPureControls_1.numericStateValue)(this.device.controlState, 'nmbrightness') || this.lastDisplayBrightness;
+            const currentBrightness = (0, comfortPureControls_1.numericStateValue)(this.device.controlState, 'nmbrightness');
+            if (currentBrightness !== undefined && (0, comfortPureControls_1.displayBrightnessIsOn)(currentBrightness, this.getDisplayBrightnessOffFloor())) {
+                this.lastDisplayBrightness = currentBrightness;
+            }
             this.platform.log.info(`[${this.device.name}] Setting display light: homekit=${value}, key=nmbrightness, raw=0`);
             await this.device.setState('nmbrightness', 0);
             return;
@@ -454,7 +459,8 @@ class AirPurifierAccessory {
         await this.device.setState('nmbrightness', rawValue);
     }
     getDisplayBrightness() {
-        return (0, capabilities_1.rawToPercent)((0, comfortPureControls_1.numericStateValue)(this.device.controlState, 'nmbrightness'), this.getDisplayBrightnessMax());
+        const rawValue = (0, comfortPureControls_1.numericStateValue)(this.device.controlState, 'nmbrightness');
+        return (0, comfortPureControls_1.displayBrightnessToPercent)(rawValue, this.getDisplayBrightnessMax(), this.getDisplayBrightnessOffFloor());
     }
     async setDisplayBrightness(value) {
         if (!this.supportsDisplayLight) {
@@ -644,6 +650,9 @@ class AirPurifierAccessory {
             return this.configDev.displayBrightnessMax;
         }
         return (_b = (_a = this.device.deviceMetadata.displayBrightness) === null || _a === void 0 ? void 0 : _a.rawMax) !== null && _b !== void 0 ? _b : 100;
+    }
+    getDisplayBrightnessOffFloor() {
+        return this.device.deviceMetadata.adapterId === 'comfort-pure-t10i' ? comfortPureControls_1.COMFORT_PURE_DISPLAY_OFF_FLOOR : 0;
     }
     getClimateFanSpeedAttribute() {
         var _a, _b, _c, _d, _e, _f;

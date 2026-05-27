@@ -6,6 +6,9 @@ import {
   booleanStateValue,
   booleanWriteValue,
   celsiusToBlueairSetpoint,
+  COMFORT_PURE_DISPLAY_OFF_FLOOR,
+  displayBrightnessIsOn,
+  displayBrightnessToPercent,
   nearestTimerPresetSeconds,
   timerDurationSeconds,
   timerRemainingSeconds,
@@ -34,5 +37,13 @@ describe('ComfortPure safe-control helpers', () => {
   it('keeps ambient temperature separate from heat setpoint conversion', () => {
     expect(blueairTemperatureToCelsius(260)).toBe(26);
     expect(celsiusToBlueairSetpoint(23.5)).toBe(235);
+  });
+
+  it('treats the ComfortPure display brightness floor as off', () => {
+    expect(displayBrightnessIsOn(0, COMFORT_PURE_DISPLAY_OFF_FLOOR)).toBe(false);
+    expect(displayBrightnessIsOn(7, COMFORT_PURE_DISPLAY_OFF_FLOOR)).toBe(false);
+    expect(displayBrightnessIsOn(8, COMFORT_PURE_DISPLAY_OFF_FLOOR)).toBe(true);
+    expect(displayBrightnessToPercent(7, 100, COMFORT_PURE_DISPLAY_OFF_FLOOR)).toBe(0);
+    expect(displayBrightnessToPercent(50, 100, COMFORT_PURE_DISPLAY_OFF_FLOOR)).toBe(50);
   });
 });

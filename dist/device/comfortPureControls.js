@@ -1,7 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.clampClimateSetpoint = exports.celsiusToBlueairSetpoint = exports.blueairTemperatureToCelsius = exports.timerRemainingSeconds = exports.timerDurationSeconds = exports.nearestTimerPresetSeconds = exports.booleanWriteValue = exports.booleanStateValue = exports.numericStateValue = exports.COMFORT_PURE_MAIN_MODE = exports.COMFORT_PURE_TIMER_PRESETS_SECONDS = void 0;
+exports.clampClimateSetpoint = exports.celsiusToBlueairSetpoint = exports.blueairTemperatureToCelsius = exports.displayBrightnessToPercent = exports.displayBrightnessIsOn = exports.timerRemainingSeconds = exports.timerDurationSeconds = exports.nearestTimerPresetSeconds = exports.booleanWriteValue = exports.booleanStateValue = exports.numericStateValue = exports.COMFORT_PURE_MAIN_MODE = exports.COMFORT_PURE_DISPLAY_OFF_FLOOR = exports.COMFORT_PURE_TIMER_PRESETS_SECONDS = void 0;
 exports.COMFORT_PURE_TIMER_PRESETS_SECONDS = [30 * 60, 60 * 60, 2 * 60 * 60, 4 * 60 * 60];
+exports.COMFORT_PURE_DISPLAY_OFF_FLOOR = 7;
 exports.COMFORT_PURE_MAIN_MODE = {
     FAN_ONLY: 0,
     HEAT: 1,
@@ -49,6 +50,17 @@ function timerRemainingSeconds(state, nowSeconds = Math.floor(Date.now() / 1000)
     return Math.max(0, Math.round(duration - (nowSeconds - startedAt)));
 }
 exports.timerRemainingSeconds = timerRemainingSeconds;
+function displayBrightnessIsOn(value, offFloor = 0) {
+    return value !== undefined && value > offFloor;
+}
+exports.displayBrightnessIsOn = displayBrightnessIsOn;
+function displayBrightnessToPercent(value, rawMax, offFloor = 0) {
+    if (value === undefined || !displayBrightnessIsOn(value, offFloor) || rawMax <= 0) {
+        return 0;
+    }
+    return Math.min(100, Math.round((value / rawMax) * 100));
+}
+exports.displayBrightnessToPercent = displayBrightnessToPercent;
 function blueairTemperatureToCelsius(value) {
     if (value === undefined) {
         return undefined;

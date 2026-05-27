@@ -1,6 +1,7 @@
 import type { BlueAirDeviceState } from '../api/BlueAirAwsApi';
 
 export const COMFORT_PURE_TIMER_PRESETS_SECONDS = [30 * 60, 60 * 60, 2 * 60 * 60, 4 * 60 * 60];
+export const COMFORT_PURE_DISPLAY_OFF_FLOOR = 7;
 
 export const COMFORT_PURE_MAIN_MODE = {
   FAN_ONLY: 0,
@@ -53,6 +54,18 @@ export function timerRemainingSeconds(state: BlueAirDeviceState, nowSeconds = Ma
   }
 
   return Math.max(0, Math.round(duration - (nowSeconds - startedAt)));
+}
+
+export function displayBrightnessIsOn(value: number | undefined, offFloor = 0): boolean {
+  return value !== undefined && value > offFloor;
+}
+
+export function displayBrightnessToPercent(value: number | undefined, rawMax: number, offFloor = 0): number {
+  if (value === undefined || !displayBrightnessIsOn(value, offFloor) || rawMax <= 0) {
+    return 0;
+  }
+
+  return Math.min(100, Math.round((value / rawMax) * 100));
 }
 
 export function blueairTemperatureToCelsius(value: number | undefined): number | undefined {

@@ -1,5 +1,6 @@
 import type { BlueAirDeviceState } from '../api/BlueAirAwsApi';
 export declare const COMFORT_PURE_TIMER_PRESETS_SECONDS: number[];
+export declare const COMFORT_PURE_DISPLAY_OFF_FLOOR = 7;
 export declare const COMFORT_PURE_MAIN_MODE: {
     readonly FAN_ONLY: 0;
     readonly HEAT: 1;
@@ -11,6 +12,8 @@ export declare function booleanWriteValue(state: BlueAirDeviceState, key: string
 export declare function nearestTimerPresetSeconds(seconds: number): number;
 export declare function timerDurationSeconds(state: BlueAirDeviceState): number;
 export declare function timerRemainingSeconds(state: BlueAirDeviceState, nowSeconds?: number): number;
+export declare function displayBrightnessIsOn(value: number | undefined, offFloor?: number): boolean;
+export declare function displayBrightnessToPercent(value: number | undefined, rawMax: number, offFloor?: number): number;
 export declare function blueairTemperatureToCelsius(value: number | undefined): number | undefined;
 export declare function celsiusToBlueairSetpoint(value: number): number;
 export declare function clampClimateSetpoint(value: number): number;
