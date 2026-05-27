@@ -19,15 +19,16 @@ class AirPurifierAccessory {
         this.supportsOscillation = false;
         this.supportsSleepTimer = false;
         this.lastDisplayBrightness = 100;
+        const baseName = (0, homekitNames_1.sanitizeHomeKitName)(this.configDev.name || this.device.name);
         this.accessory
             .getService(this.platform.Service.AccessoryInformation)
+            .setCharacteristic(this.platform.Characteristic.Name, baseName)
             .setCharacteristic(this.platform.Characteristic.Manufacturer, 'BlueAir')
             .setCharacteristic(this.platform.Characteristic.Model, this.configDev.model || 'BlueAir Purifier')
             .setCharacteristic(this.platform.Characteristic.SerialNumber, this.configDev.serialNumber || 'BlueAir Device');
         const capabilities = (0, capabilities_1.inferDeviceCapabilities)(this.device.controlState, this.device.sensorState);
         const autoExposeAvailableServices = this.platform.platformConfig.autoExposeAvailableServices;
         const disabledServices = (_a = this.configDev.disabledServices) !== null && _a !== void 0 ? _a : [];
-        const baseName = (0, homekitNames_1.sanitizeHomeKitName)(this.configDev.name || this.device.name);
         this.supportsAutoMode = capabilities.controls.autoMode;
         this.supportsChildLock = capabilities.controls.childLock;
         this.supportsFanSpeed = Boolean(this.device.deviceMetadata.fanSpeed);
@@ -82,7 +83,7 @@ class AirPurifierAccessory {
             .onGet(this.getFilterChangeIndication.bind(this));
         this.filterMaintenanceService.getCharacteristic(this.platform.Characteristic.FilterLifeLevel).onGet(this.getFilterLifeLevel.bind(this));
         this.ledService = this.accessory.getServiceById(this.platform.Service.Lightbulb, 'Led');
-        if ((0, capabilities_1.shouldExposeService)('led', this.configDev.led, capabilities.controls.brightness, autoExposeAvailableServices, disabledServices)) {
+        if ((0, capabilities_1.shouldExposeLedService)(this.configDev.led, capabilities.controls.brightness, this.supportsDisplayLight, autoExposeAvailableServices, disabledServices)) {
             const ledName = (0, homekitNames_1.serviceName)(baseName, 'Led');
             (_b = this.ledService) !== null && _b !== void 0 ? _b : (this.ledService = this.accessory.addService(this.platform.Service.Lightbulb, ledName, 'Led'));
             this.ledService.setCharacteristic(this.platform.Characteristic.Name, ledName);
@@ -95,6 +96,7 @@ class AirPurifierAccessory {
         }
         else if (this.ledService) {
             this.accessory.removeService(this.ledService);
+            this.ledService = undefined;
         }
         this.airQualityService = this.accessory.getServiceById(this.platform.Service.AirQualitySensor, 'AirQuality');
         if ((0, capabilities_1.shouldExposeDetectedService)('airQuality', this.configDev.airQualitySensor, capabilities.sensors.airQuality, autoExposeAvailableServices, disabledServices)) {
@@ -143,6 +145,7 @@ class AirPurifierAccessory {
         }
         else if (this.germShieldService) {
             this.accessory.removeService(this.germShieldService);
+            this.germShieldService = undefined;
         }
         this.nightModeService = this.accessory.getServiceById(this.platform.Service.Switch, 'NightMode');
         if ((0, capabilities_1.shouldExposeService)('nightMode', this.configDev.nightMode, capabilities.controls.nightMode, autoExposeAvailableServices, disabledServices)) {
@@ -157,6 +160,7 @@ class AirPurifierAccessory {
         }
         else if (this.nightModeService) {
             this.accessory.removeService(this.nightModeService);
+            this.nightModeService = undefined;
         }
         this.displayLightService = this.accessory.getServiceById(this.platform.Service.Lightbulb, 'DisplayLight');
         if (this.supportsDisplayLight && !disabledServices.includes('displayLight')) {

@@ -33,6 +33,7 @@ describe('Blueair realtime parser', () => {
     expect(update?.sensorData.hcho).toBe(2);
     expect(update?.sensorData.rssi).toBe(-51);
     expect(update?.sensorData.fanspeed).toBeUndefined();
+    expect(update?.sensorData.fsp0).toBeUndefined();
     expect(update?.state).toEqual({});
   });
 

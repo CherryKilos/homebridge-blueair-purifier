@@ -74,6 +74,7 @@ export function parseRealtimeMessage(topic: string, payload: Buffer | string): B
 function readOnlyRealtimeSensorData(sensorData: BlueAirDeviceSensorData): BlueAirDeviceSensorData {
   const readOnlySensorData = { ...sensorData };
   delete readOnlySensorData.fanspeed;
+  delete readOnlySensorData.fsp0;
   return readOnlySensorData;
 }
 

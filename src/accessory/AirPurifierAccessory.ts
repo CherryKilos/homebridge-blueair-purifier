@@ -9,6 +9,7 @@ import {
   percentToRaw,
   rawToPercent,
   shouldExposeDetectedService,
+  shouldExposeLedService,
   shouldExposeService,
   temperatureToCelsius,
 } from '../device/capabilities';
@@ -53,8 +54,10 @@ export class AirPurifierAccessory {
     protected readonly device: BlueAirDevice,
     protected readonly configDev: DeviceConfig,
   ) {
+    const baseName = sanitizeHomeKitName(this.configDev.name || this.device.name);
     this.accessory
       .getService(this.platform.Service.AccessoryInformation)!
+      .setCharacteristic(this.platform.Characteristic.Name, baseName)
       .setCharacteristic(this.platform.Characteristic.Manufacturer, 'BlueAir')
       .setCharacteristic(this.platform.Characteristic.Model, this.configDev.model || 'BlueAir Purifier')
       .setCharacteristic(this.platform.Characteristic.SerialNumber, this.configDev.serialNumber || 'BlueAir Device');
@@ -62,7 +65,6 @@ export class AirPurifierAccessory {
     const capabilities = inferDeviceCapabilities(this.device.controlState, this.device.sensorState);
     const autoExposeAvailableServices = this.platform.platformConfig.autoExposeAvailableServices;
     const disabledServices = this.configDev.disabledServices ?? [];
-    const baseName = sanitizeHomeKitName(this.configDev.name || this.device.name);
     this.supportsAutoMode = capabilities.controls.autoMode;
     this.supportsChildLock = capabilities.controls.childLock;
     this.supportsFanSpeed = Boolean(this.device.deviceMetadata.fanSpeed);
@@ -125,7 +127,15 @@ export class AirPurifierAccessory {
     this.filterMaintenanceService.getCharacteristic(this.platform.Characteristic.FilterLifeLevel).onGet(this.getFilterLifeLevel.bind(this));
 
     this.ledService = this.accessory.getServiceById(this.platform.Service.Lightbulb, 'Led');
-    if (shouldExposeService('led', this.configDev.led, capabilities.controls.brightness, autoExposeAvailableServices, disabledServices)) {
+    if (
+      shouldExposeLedService(
+        this.configDev.led,
+        capabilities.controls.brightness,
+        this.supportsDisplayLight,
+        autoExposeAvailableServices,
+        disabledServices,
+      )
+    ) {
       const ledName = serviceName(baseName, 'Led');
       this.ledService ??= this.accessory.addService(this.platform.Service.Lightbulb, ledName, 'Led');
       this.ledService.setCharacteristic(this.platform.Characteristic.Name, ledName);
@@ -137,6 +147,7 @@ export class AirPurifierAccessory {
         .onSet(this.setLedBrightness.bind(this));
     } else if (this.ledService) {
       this.accessory.removeService(this.ledService);
+      this.ledService = undefined;
     }
 
     this.airQualityService = this.accessory.getServiceById(this.platform.Service.AirQualitySensor, 'AirQuality');
@@ -229,6 +240,7 @@ export class AirPurifierAccessory {
         .onSet(this.setGermShield.bind(this));
     } else if (this.germShieldService) {
       this.accessory.removeService(this.germShieldService);
+      this.germShieldService = undefined;
     }
 
     this.nightModeService = this.accessory.getServiceById(this.platform.Service.Switch, 'NightMode');
@@ -251,6 +263,7 @@ export class AirPurifierAccessory {
         .onSet(this.setNightMode.bind(this));
     } else if (this.nightModeService) {
       this.accessory.removeService(this.nightModeService);
+      this.nightModeService = undefined;
     }
 
     this.displayLightService = this.accessory.getServiceById(this.platform.Service.Lightbulb, 'DisplayLight');

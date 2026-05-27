@@ -8,10 +8,12 @@ import {
   resolveBrightnessMax,
   resolveFanSpeedMax,
   shouldExposeDetectedService,
+  shouldExposeLedService,
   shouldExposeService,
   temperatureToCelsius,
 } from '../src/device/capabilities';
 import { FullBlueAirDeviceState } from '../src/api/BlueAirAwsApi';
+import { defaultConfig, defaultDeviceConfig } from '../src/platformUtils';
 
 const testDeviceMetadata = {
   adapterId: 'blue-pure-max' as const,
@@ -125,6 +127,12 @@ describe('normalization helpers', () => {
 });
 
 describe('capability inference', () => {
+  it('keeps clean HomeKit defaults for realtime sensors, climate, and sleep timer', () => {
+    expect(defaultConfig.realtimeSensors).toBe('auto');
+    expect(defaultDeviceConfig.comfortPureClimateMode).toBe('off');
+    expect(defaultDeviceConfig.sleepTimer).toBe(false);
+  });
+
   it('detects sensors and controls from redacted personal-device shaped fixtures', () => {
     const t10i = inferDeviceCapabilities(redactedFixtures.comfortPureT10i.state, redactedFixtures.comfortPureT10i.sensorData);
     const pure211 = inferDeviceCapabilities(redactedFixtures.bluePure211iMax.state, redactedFixtures.bluePure211iMax.sensorData);
@@ -148,6 +156,13 @@ describe('capability inference', () => {
   it('does not expose read-only sensor services when no payload value was detected', () => {
     expect(shouldExposeDetectedService('temperature', true, false, true)).toBe(false);
     expect(shouldExposeDetectedService('temperature', false, true, true)).toBe(true);
+  });
+
+  it('prefers ComfortPure display light over a duplicate generic LED tile by default', () => {
+    expect(shouldExposeLedService(false, true, true, true)).toBe(false);
+    expect(shouldExposeLedService(true, true, true, true)).toBe(true);
+    expect(shouldExposeLedService(true, true, true, true, ['led'])).toBe(false);
+    expect(shouldExposeLedService(false, true, false, true)).toBe(true);
   });
 
   it('does not infer ambient temperature from ComfortPure heat setpoints', () => {

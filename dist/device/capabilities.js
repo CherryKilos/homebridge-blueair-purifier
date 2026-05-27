@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.brightnessMaxForDevice = exports.fanSpeedMaxForWritableState = exports.fanSpeedMaxForDevice = exports.temperatureToCelsius = exports.percentToRaw = exports.rawToPercent = exports.resolveBrightnessMax = exports.resolveFanSpeedMax = exports.shouldExposeDetectedService = exports.shouldExposeService = exports.inferDeviceCapabilities = void 0;
+exports.brightnessMaxForDevice = exports.fanSpeedMaxForWritableState = exports.fanSpeedMaxForDevice = exports.temperatureToCelsius = exports.percentToRaw = exports.rawToPercent = exports.resolveBrightnessMax = exports.resolveFanSpeedMax = exports.shouldExposeLedService = exports.shouldExposeDetectedService = exports.shouldExposeService = exports.inferDeviceCapabilities = void 0;
 const DEFAULT_FAN_SPEED_MAX = 3;
 const LOW_RANGE_BRIGHTNESS_MAX = 10;
 const PERCENT_MAX = 100;
@@ -50,6 +50,16 @@ function shouldExposeDetectedService(service, legacyConfigEnabled, capabilityDet
         shouldExposeService(service, legacyConfigEnabled, capabilityDetected, autoExposeAvailableServices, disabledServices));
 }
 exports.shouldExposeDetectedService = shouldExposeDetectedService;
+function shouldExposeLedService(legacyConfigEnabled, capabilityDetected, displayLightDetected, autoExposeAvailableServices, disabledServices = []) {
+    if (disabledServices.includes('led')) {
+        return false;
+    }
+    if (legacyConfigEnabled) {
+        return capabilityDetected;
+    }
+    return autoExposeAvailableServices && capabilityDetected && !displayLightDetected;
+}
+exports.shouldExposeLedService = shouldExposeLedService;
 function resolveFanSpeedMax(configuredMax, observedMax) {
     if (configuredMax && configuredMax > 0) {
         return configuredMax;

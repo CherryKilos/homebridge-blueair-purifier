@@ -94,6 +94,24 @@ export function shouldExposeDetectedService(
   );
 }
 
+export function shouldExposeLedService(
+  legacyConfigEnabled: boolean,
+  capabilityDetected: boolean,
+  displayLightDetected: boolean,
+  autoExposeAvailableServices: boolean,
+  disabledServices: DisabledService[] = [],
+): boolean {
+  if (disabledServices.includes('led')) {
+    return false;
+  }
+
+  if (legacyConfigEnabled) {
+    return capabilityDetected;
+  }
+
+  return autoExposeAvailableServices && capabilityDetected && !displayLightDetected;
+}
+
 export function resolveFanSpeedMax(configuredMax?: number, observedMax?: number): number {
   if (configuredMax && configuredMax > 0) {
     return configuredMax;

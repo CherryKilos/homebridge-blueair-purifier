@@ -52,6 +52,7 @@ exports.parseRealtimeMessage = parseRealtimeMessage;
 function readOnlyRealtimeSensorData(sensorData) {
     const readOnlySensorData = { ...sensorData };
     delete readOnlySensorData.fanspeed;
+    delete readOnlySensorData.fsp0;
     return readOnlySensorData;
 }
 function realtimeSubscriptionTopics(deviceIds) {

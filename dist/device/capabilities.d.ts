@@ -28,6 +28,7 @@ export type DeviceCapabilities = {
 export declare function inferDeviceCapabilities(state: BlueAirDeviceState, sensorData: BlueAirDeviceSensorData): DeviceCapabilities;
 export declare function shouldExposeService(service: DisabledService, legacyConfigEnabled: boolean, capabilityDetected: boolean, autoExposeAvailableServices: boolean, disabledServices?: DisabledService[]): boolean;
 export declare function shouldExposeDetectedService(service: DisabledService, legacyConfigEnabled: boolean, capabilityDetected: boolean, autoExposeAvailableServices: boolean, disabledServices?: DisabledService[]): boolean;
+export declare function shouldExposeLedService(legacyConfigEnabled: boolean, capabilityDetected: boolean, displayLightDetected: boolean, autoExposeAvailableServices: boolean, disabledServices?: DisabledService[]): boolean;
 export declare function resolveFanSpeedMax(configuredMax?: number, observedMax?: number): number;
 export declare function resolveBrightnessMax(configuredMax?: number, observedMax?: number): number;
 export declare function rawToPercent(rawValue: number | undefined, rawMax: number): number;
