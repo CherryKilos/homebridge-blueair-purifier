@@ -267,6 +267,7 @@ class BlueAirAwsApi {
     sensorStateOnly(sensorData) {
         const readOnlySensorData = { ...sensorData };
         delete readOnlySensorData.fanspeed;
+        delete readOnlySensorData.fsp0;
         return readOnlySensorData;
     }
     extractDeviceInfo(response, deviceId) {

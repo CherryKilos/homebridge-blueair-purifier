@@ -24,5 +24,6 @@ export declare class BlueAirPlatform extends EventEmitter implements DynamicPlat
     private logDeclaredRealtimeSensors;
     private handleRealtimeUpdate;
     addDevice(device: BlueAirDeviceStatus): Promise<void>;
+    private logDeviceStartupSummary;
 }
 //# sourceMappingURL=platform.d.ts.map

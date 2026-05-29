@@ -35,6 +35,14 @@ function hasValue<T>(value: T | undefined): boolean {
   return value !== undefined;
 }
 
+export function clampPercent(value: number): number {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+
+  return Math.min(PERCENT_MAX, Math.max(0, Math.round(value)));
+}
+
 export function inferDeviceCapabilities(state: BlueAirDeviceState, sensorData: BlueAirDeviceSensorData): DeviceCapabilities {
   const hasPm2_5 = hasValue(sensorData.pm2_5);
   const hasPm10 = hasValue(sensorData.pm10);
@@ -145,7 +153,7 @@ export function rawToPercent(rawValue: number | undefined, rawMax: number): numb
     return 0;
   }
 
-  return Math.min(PERCENT_MAX, Math.round((rawValue / rawMax) * PERCENT_MAX));
+  return clampPercent((rawValue / rawMax) * PERCENT_MAX);
 }
 
 export function percentToRaw(percentValue: number, rawMax: number): number {

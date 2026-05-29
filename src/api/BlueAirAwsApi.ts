@@ -445,6 +445,7 @@ export default class BlueAirAwsApi {
   private sensorStateOnly(sensorData: BlueAirDeviceSensorData): BlueAirDeviceSensorData {
     const readOnlySensorData = { ...sensorData };
     delete readOnlySensorData.fanspeed;
+    delete readOnlySensorData.fsp0;
     return readOnlySensorData;
   }
 

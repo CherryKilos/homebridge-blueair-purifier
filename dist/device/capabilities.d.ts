@@ -25,6 +25,7 @@ export type DeviceCapabilities = {
         comfortPureClimate: boolean;
     };
 };
+export declare function clampPercent(value: number): number;
 export declare function inferDeviceCapabilities(state: BlueAirDeviceState, sensorData: BlueAirDeviceSensorData): DeviceCapabilities;
 export declare function shouldExposeService(service: DisabledService, legacyConfigEnabled: boolean, capabilityDetected: boolean, autoExposeAvailableServices: boolean, disabledServices?: DisabledService[]): boolean;
 export declare function shouldExposeDetectedService(service: DisabledService, legacyConfigEnabled: boolean, capabilityDetected: boolean, autoExposeAvailableServices: boolean, disabledServices?: DisabledService[]): boolean;

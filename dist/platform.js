@@ -12,6 +12,7 @@ const BlueAirDevice_1 = require("./device/BlueAirDevice");
 const AirPurifierAccessory_1 = require("./accessory/AirPurifierAccessory");
 const events_1 = __importDefault(require("events"));
 const BlueAirRealtimeApi_1 = __importDefault(require("./api/BlueAirRealtimeApi"));
+const comfortPureControls_1 = require("./device/comfortPureControls");
 class BlueAirPlatform extends events_1.default {
     constructor(log, config, api) {
         super();
@@ -162,6 +163,7 @@ class BlueAirPlatform extends events_1.default {
         }
         const blueAirDevice = new BlueAirDevice_1.BlueAirDevice(device);
         this.devices.push(blueAirDevice);
+        this.logDeviceStartupSummary(blueAirDevice, deviceConfig);
         blueAirDevice.on('setState', async ({ id, name, attribute, value }) => {
             // this.log.info(`[${name}] Setting state: ${attribute} = ${value}`);
             // Clear polling to avoid conflicts
@@ -192,6 +194,19 @@ class BlueAirPlatform extends events_1.default {
             new AirPurifierAccessory_1.AirPurifierAccessory(this, accessory, blueAirDevice, deviceConfig);
             this.api.registerPlatformAccessories(settings_1.PLUGIN_NAME, settings_1.PLATFORM_NAME, [accessory]);
         }
+    }
+    logDeviceStartupSummary(device, deviceConfig) {
+        var _a, _b, _c, _d;
+        const metadata = device.deviceMetadata;
+        const displayOffFloor = (0, comfortPureControls_1.resolveDisplayBrightnessOffFloor)(deviceConfig.displayBrightnessOffFloor, metadata.adapterId === 'comfort-pure-t10i');
+        const climateStatus = deviceConfig.comfortPureClimateMode === 'gated'
+            ? device.sensorState.temperature !== undefined
+                ? 'gated-visible'
+                : 'gated-waiting-for-temperature'
+            : 'off';
+        this.log.info(`[${device.name}] Blueair adapter=${metadata.adapterId}; fanWrite=${(_b = (_a = metadata.fanSpeed) === null || _a === void 0 ? void 0 : _a.attribute) !== null && _b !== void 0 ? _b : 'none'}; ` +
+            `display=${(_d = (_c = metadata.displayBrightness) === null || _c === void 0 ? void 0 : _c.attribute) !== null && _d !== void 0 ? _d : 'none'}; displayOffFloor=${displayOffFloor}; ` +
+            `realtime=${this.platformConfig.realtimeSensors}; climate=${climateStatus}`);
     }
 }
 exports.BlueAirPlatform = BlueAirPlatform;

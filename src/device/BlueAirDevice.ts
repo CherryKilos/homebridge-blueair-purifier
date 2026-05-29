@@ -241,14 +241,20 @@ export class BlueAirDevice extends EventEmitter {
 
   private calculateAqiForSensor(value: number, sensor: string) {
     const levels = AQI[sensor];
+    if (!Number.isFinite(value) || value <= levels.CONC_LO[0]) {
+      return levels.AQI_LO[0];
+    }
+
     for (let i = 0; i < levels.AQI_LO.length; i++) {
-      if (value >= levels.CONC_LO[i] && value <= levels.CONC_HI[i]) {
+      if (value <= levels.CONC_HI[i]) {
+        const clampedValue = Math.max(value, levels.CONC_LO[i]);
         return Math.round(
-          ((levels.AQI_HI[i] - levels.AQI_LO[i]) / (levels.CONC_HI[i] - levels.CONC_LO[i])) * (value - levels.CONC_LO[i]) +
+          ((levels.AQI_HI[i] - levels.AQI_LO[i]) / (levels.CONC_HI[i] - levels.CONC_LO[i])) * (clampedValue - levels.CONC_LO[i]) +
             levels.AQI_LO[i],
         );
       }
     }
-    return 0;
+
+    return levels.AQI_HI[levels.AQI_HI.length - 1];
   }
 }

@@ -5,8 +5,19 @@ const { defaultsDeep } = require('lodash');
 
 const BlueAirAwsApi = require('../dist/api/BlueAirAwsApi.js').default;
 const BlueAirRealtimeApi = require('../dist/api/BlueAirRealtimeApi.js').default;
-const { defaultConfig } = require('../dist/platformUtils.js');
+const { defaultConfig, defaultDeviceConfig } = require('../dist/platformUtils.js');
 const { PLATFORM_NAME } = require('../dist/settings.js');
+const {
+  inferDeviceCapabilities,
+  shouldExposeDetectedService,
+  shouldExposeLedService,
+  shouldExposeService,
+} = require('../dist/device/capabilities.js');
+const {
+  displayBrightnessIsOn,
+  displayBrightnessToPercent,
+  resolveDisplayBrightnessOffFloor,
+} = require('../dist/device/comfortPureControls.js');
 
 const SENSITIVE_KEY_PATTERNS = [
   /authorization/i,
@@ -103,7 +114,9 @@ async function loadPluginConfig() {
     throw new Error(`No "${PLATFORM_NAME}" platform config found in ${configPath}`);
   }
 
-  return defaultsDeep({}, pluginConfig, defaultConfig);
+  const config = defaultsDeep({}, pluginConfig, defaultConfig);
+  config.devices = (config.devices || []).map((device) => defaultsDeep({}, device, defaultDeviceConfig));
+  return config;
 }
 
 function rawShape(value) {
@@ -127,12 +140,140 @@ function rawShape(value) {
   };
 }
 
-function adapterStatusSummary(normalizedStatus) {
+function deviceConfigFor(config, device) {
+  return config.devices.find((deviceConfig) => deviceConfig.id === device.id) || defaultDeviceConfig;
+}
+
+function displayBrightnessSummary(device, deviceConfig) {
+  if (!device.deviceMetadata.displayBrightness) {
+    return undefined;
+  }
+
+  const rawValue = typeof device.controlState.nmbrightness === 'number' ? device.controlState.nmbrightness : undefined;
+  const rawMax =
+    deviceConfig.displayBrightnessMax && deviceConfig.displayBrightnessMax > 0
+      ? deviceConfig.displayBrightnessMax
+      : device.deviceMetadata.displayBrightness.rawMax;
+  const offFloor = resolveDisplayBrightnessOffFloor(
+    deviceConfig.displayBrightnessOffFloor,
+    device.deviceMetadata.adapterId === 'comfort-pure-t10i',
+  );
+
+  return {
+    rawValue,
+    rawMax,
+    offFloor,
+    homeKitOn: displayBrightnessIsOn(rawValue, offFloor),
+    homeKitBrightness: displayBrightnessToPercent(rawValue, rawMax, offFloor),
+  };
+}
+
+function exposedHomeKitServices(device, deviceConfig, config) {
+  const capabilities = inferDeviceCapabilities(device.controlState, device.sensorState);
+  const disabledServices = deviceConfig.disabledServices || [];
+  const services = ['AirPurifier', 'FilterMaintenance'];
+
+  if (device.deviceMetadata.fanSpeed) {
+    services.push('AirPurifier.RotationSpeed');
+  }
+  if (capabilities.controls.childLock) {
+    services.push('AirPurifier.LockPhysicalControls');
+  }
+  if (device.deviceMetadata.oscillation && !disabledServices.includes('oscillation')) {
+    services.push('AirPurifier.SwingMode');
+  }
+  if (
+    shouldExposeLedService(
+      deviceConfig.led,
+      capabilities.controls.brightness,
+      Boolean(device.deviceMetadata.displayBrightness),
+      config.autoExposeAvailableServices,
+      disabledServices,
+    )
+  ) {
+    services.push('Lightbulb.Led');
+  }
+  if (device.deviceMetadata.displayBrightness && !disabledServices.includes('displayLight')) {
+    services.push('Lightbulb.Display');
+  }
+  if (
+    shouldExposeDetectedService(
+      'airQuality',
+      deviceConfig.airQualitySensor,
+      capabilities.sensors.airQuality,
+      config.autoExposeAvailableServices,
+      disabledServices,
+    )
+  ) {
+    services.push('AirQualitySensor');
+  }
+  if (
+    shouldExposeDetectedService(
+      'temperature',
+      deviceConfig.temperatureSensor,
+      capabilities.sensors.temperature,
+      config.autoExposeAvailableServices,
+      disabledServices,
+    )
+  ) {
+    services.push('TemperatureSensor');
+  }
+  if (
+    shouldExposeDetectedService(
+      'humidity',
+      deviceConfig.humiditySensor,
+      capabilities.sensors.humidity,
+      config.autoExposeAvailableServices,
+      disabledServices,
+    )
+  ) {
+    services.push('HumiditySensor');
+  }
+  if (
+    shouldExposeService(
+      'germShield',
+      deviceConfig.germShield,
+      capabilities.controls.germShield,
+      config.autoExposeAvailableServices,
+      disabledServices,
+    )
+  ) {
+    services.push('Switch.GermShield');
+  }
+  if (
+    shouldExposeService(
+      'nightMode',
+      deviceConfig.nightMode,
+      capabilities.controls.nightMode,
+      config.autoExposeAvailableServices,
+      disabledServices,
+    )
+  ) {
+    services.push('Switch.NightMode');
+  }
+  if (deviceConfig.sleepTimer && device.deviceMetadata.sleepTimer && !disabledServices.includes('sleepTimer')) {
+    services.push('Valve.SleepTimer');
+  }
+  if (
+    deviceConfig.comfortPureClimateMode === 'gated' &&
+    device.deviceMetadata.climate &&
+    device.sensorState.temperature !== undefined &&
+    !disabledServices.includes('comfortPureClimate')
+  ) {
+    services.push('HeaterCooler.ComfortPureClimate');
+  }
+
+  return services;
+}
+
+function adapterStatusSummary(normalizedStatus, config) {
   return normalizedStatus.map((device) => ({
     id: device.id,
     name: device.name,
     controlState: device.controlState,
     sensorState: device.sensorState,
+    displayBrightness: displayBrightnessSummary(device, deviceConfigFor(config, device)),
+    exposedHomeKitServices: exposedHomeKitServices(device, deviceConfigFor(config, device), config),
     adapter: {
       id: device.deviceMetadata.adapterId,
       name: device.deviceMetadata.adapterName,
@@ -249,7 +390,7 @@ async function main() {
     registeredDevices,
     rawInitialState,
     normalizedStatus,
-    adapterStatus: adapterStatusSummary(normalizedStatus),
+    adapterStatus: adapterStatusSummary(normalizedStatus, config),
     mqttAuth,
     realtimeSampleSummary,
     sensorProbeResults,

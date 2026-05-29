@@ -412,7 +412,7 @@ class AirPurifierAccessory {
             : this.platform.Characteristic.FilterChangeIndication.FILTER_OK;
     }
     getFilterLifeLevel() {
-        return 100 - (this.device.controlState.filterusage || 0);
+        return (0, capabilities_1.clampPercent)(100 - (this.device.controlState.filterusage || 0));
     }
     getCurrentTemperature() {
         return (0, capabilities_1.temperatureToCelsius)(this.device.sensorState.temperature, this.configDev.temperatureInputUnit);
@@ -467,7 +467,7 @@ class AirPurifierAccessory {
             this.platform.log.warn(`[${this.device.name}] Ignoring display brightness change because this device did not report nmbrightness support.`);
             return;
         }
-        const rawValue = (0, capabilities_1.percentToRaw)(Number(value), this.getDisplayBrightnessMax());
+        const rawValue = (0, comfortPureControls_1.displayBrightnessPercentToRaw)(Number(value), this.getDisplayBrightnessMax(), this.getDisplayBrightnessOffFloor());
         this.platform.log.info(`[${this.device.name}] Setting display brightness: homekit=${value}, key=nmbrightness, raw=${rawValue}`);
         if (rawValue > 0) {
             this.lastDisplayBrightness = rawValue;
@@ -652,7 +652,7 @@ class AirPurifierAccessory {
         return (_b = (_a = this.device.deviceMetadata.displayBrightness) === null || _a === void 0 ? void 0 : _a.rawMax) !== null && _b !== void 0 ? _b : 100;
     }
     getDisplayBrightnessOffFloor() {
-        return this.device.deviceMetadata.adapterId === 'comfort-pure-t10i' ? comfortPureControls_1.COMFORT_PURE_DISPLAY_OFF_FLOOR : 0;
+        return (0, comfortPureControls_1.resolveDisplayBrightnessOffFloor)(this.configDev.displayBrightnessOffFloor, this.device.deviceMetadata.adapterId === 'comfort-pure-t10i');
     }
     getClimateFanSpeedAttribute() {
         var _a, _b, _c, _d, _e, _f;

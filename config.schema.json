@@ -128,6 +128,12 @@
               "type": "number",
               "default": 100
             },
+            "displayBrightnessOffFloor": {
+              "title": "Display Brightness Off Floor",
+              "description": "Raw display brightness value treated as off. Leave blank for auto: ComfortPure uses 7, other devices use 0.",
+              "type": "number",
+              "minimum": 0
+            },
             "comfortPureClimateMode": {
               "title": "ComfortPure Climate Mode",
               "description": "Expose a gated Heater/Cooler service only after real ambient temperature has been received.",
@@ -234,6 +240,7 @@
             "devices[].fanSpeedMax",
             "devices[].brightnessMax",
             "devices[].displayBrightnessMax",
+            "devices[].displayBrightnessOffFloor",
             "devices[].comfortPureClimateMode",
             "devices[].disabledServices",
             "devices[].led",

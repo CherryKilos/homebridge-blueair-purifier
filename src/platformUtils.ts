@@ -38,6 +38,7 @@ export type DeviceConfig = {
   fanSpeedMax: number;
   brightnessMax: number;
   displayBrightnessMax: number;
+  displayBrightnessOffFloor?: number;
   comfortPureClimateMode: ComfortPureClimateMode;
   disabledServices: DisabledService[];
   led: boolean;

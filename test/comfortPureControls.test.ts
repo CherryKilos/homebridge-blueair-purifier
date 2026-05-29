@@ -8,8 +8,10 @@ import {
   celsiusToBlueairSetpoint,
   COMFORT_PURE_DISPLAY_OFF_FLOOR,
   displayBrightnessIsOn,
+  displayBrightnessPercentToRaw,
   displayBrightnessToPercent,
   nearestTimerPresetSeconds,
+  resolveDisplayBrightnessOffFloor,
   timerDurationSeconds,
   timerRemainingSeconds,
 } from '../src/device/comfortPureControls';
@@ -45,5 +47,14 @@ describe('ComfortPure safe-control helpers', () => {
     expect(displayBrightnessIsOn(8, COMFORT_PURE_DISPLAY_OFF_FLOOR)).toBe(true);
     expect(displayBrightnessToPercent(7, 100, COMFORT_PURE_DISPLAY_OFF_FLOOR)).toBe(0);
     expect(displayBrightnessToPercent(50, 100, COMFORT_PURE_DISPLAY_OFF_FLOOR)).toBe(50);
+    expect(displayBrightnessPercentToRaw(1, 100, COMFORT_PURE_DISPLAY_OFF_FLOOR)).toBe(8);
+    expect(displayBrightnessPercentToRaw(50, 100, COMFORT_PURE_DISPLAY_OFF_FLOOR)).toBe(50);
+    expect(displayBrightnessPercentToRaw(0, 100, COMFORT_PURE_DISPLAY_OFF_FLOOR)).toBe(0);
+  });
+
+  it('resolves ComfortPure display brightness floor with an explicit override', () => {
+    expect(resolveDisplayBrightnessOffFloor(undefined, true)).toBe(7);
+    expect(resolveDisplayBrightnessOffFloor(undefined, false)).toBe(0);
+    expect(resolveDisplayBrightnessOffFloor(3, true)).toBe(3);
   });
 });

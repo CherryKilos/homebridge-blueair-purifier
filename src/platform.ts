@@ -8,6 +8,7 @@ import { BlueAirDevice } from './device/BlueAirDevice';
 import { AirPurifierAccessory } from './accessory/AirPurifierAccessory';
 import EventEmitter from 'events';
 import BlueAirRealtimeApi, { BlueAirRealtimeUpdate } from './api/BlueAirRealtimeApi';
+import { resolveDisplayBrightnessOffFloor } from './device/comfortPureControls';
 
 export class BlueAirPlatform extends EventEmitter implements DynamicPlatformPlugin {
   public readonly Service: typeof Service;
@@ -198,6 +199,7 @@ export class BlueAirPlatform extends EventEmitter implements DynamicPlatformPlug
 
     const blueAirDevice = new BlueAirDevice(device);
     this.devices.push(blueAirDevice);
+    this.logDeviceStartupSummary(blueAirDevice, deviceConfig);
 
     blueAirDevice.on('setState', async ({ id, name, attribute, value }) => {
       // this.log.info(`[${name}] Setting state: ${attribute} = ${value}`);
@@ -228,5 +230,25 @@ export class BlueAirPlatform extends EventEmitter implements DynamicPlatformPlug
       new AirPurifierAccessory(this, accessory, blueAirDevice, deviceConfig);
       this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
     }
+  }
+
+  private logDeviceStartupSummary(device: BlueAirDevice, deviceConfig: Config['devices'][number]): void {
+    const metadata = device.deviceMetadata;
+    const displayOffFloor = resolveDisplayBrightnessOffFloor(
+      deviceConfig.displayBrightnessOffFloor,
+      metadata.adapterId === 'comfort-pure-t10i',
+    );
+    const climateStatus =
+      deviceConfig.comfortPureClimateMode === 'gated'
+        ? device.sensorState.temperature !== undefined
+          ? 'gated-visible'
+          : 'gated-waiting-for-temperature'
+        : 'off';
+
+    this.log.info(
+      `[${device.name}] Blueair adapter=${metadata.adapterId}; fanWrite=${metadata.fanSpeed?.attribute ?? 'none'}; ` +
+        `display=${metadata.displayBrightness?.attribute ?? 'none'}; displayOffFloor=${displayOffFloor}; ` +
+        `realtime=${this.platformConfig.realtimeSensors}; climate=${climateStatus}`,
+    );
   }
 }

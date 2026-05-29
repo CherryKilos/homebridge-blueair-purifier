@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { BlueAirDevice } from '../src/device/BlueAirDevice';
 import {
+  clampPercent,
   inferDeviceCapabilities,
   percentToRaw,
   rawToPercent,
@@ -124,6 +125,13 @@ describe('normalization helpers', () => {
     expect(rawToPercent(5, 10)).toBe(50);
     expect(percentToRaw(50, 10)).toBe(5);
   });
+
+  it('clamps HomeKit percentage values', () => {
+    expect(clampPercent(-10)).toBe(0);
+    expect(clampPercent(42.4)).toBe(42);
+    expect(clampPercent(101)).toBe(100);
+    expect(clampPercent(Number.NaN)).toBe(0);
+  });
 });
 
 describe('capability inference', () => {
@@ -131,6 +139,7 @@ describe('capability inference', () => {
     expect(defaultConfig.realtimeSensors).toBe('auto');
     expect(defaultDeviceConfig.comfortPureClimateMode).toBe('off');
     expect(defaultDeviceConfig.sleepTimer).toBe(false);
+    expect(defaultDeviceConfig.displayBrightnessOffFloor).toBeUndefined();
   });
 
   it('detects sensors and controls from redacted personal-device shaped fixtures', () => {
@@ -312,5 +321,94 @@ describe('BlueAirDevice AQI updates', () => {
     expect(updates[0].pm2_5).toBe(40);
     expect(updates[0].aqi).toBe(device.sensorData.aqi);
     expect(device.sensorData.aqi).toBeGreaterThan(100);
+  });
+
+  it('clamps very high AQI readings instead of wrapping back to excellent', async () => {
+    const device = new BlueAirDevice({
+      id: '<redacted-device-1>',
+      name: 'Blueair Test',
+      controlState: redactedFixtures.bluePure211iMax.state,
+      sensorState: {
+        pm2_5: 1,
+      },
+      deviceMetadata: testDeviceMetadata,
+      state: redactedFixtures.bluePure211iMax.state,
+      sensorData: {
+        pm2_5: 1,
+      },
+    });
+    const updates: Partial<FullBlueAirDeviceState>[] = [];
+
+    device.on('stateUpdated', (changedStates) => updates.push(changedStates));
+    device.emit('update', {
+      id: device.id,
+      name: device.name,
+      controlState: redactedFixtures.bluePure211iMax.state,
+      sensorState: {
+        pm2_5: 999,
+      },
+      deviceMetadata: testDeviceMetadata,
+      state: redactedFixtures.bluePure211iMax.state,
+      sensorData: {
+        pm2_5: 999,
+      },
+    });
+
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(updates[0].aqi).toBe(500);
+    expect(device.sensorData.aqi).toBe(500);
+  });
+
+  it('strips fan aliases from non-realtime sensor updates', async () => {
+    const device = new BlueAirDevice({
+      id: '<redacted-device-1>',
+      name: 'Blueair Test',
+      controlState: {
+        fanspeed: 3,
+        standby: false,
+      },
+      sensorState: {
+        pm2_5: 1,
+      },
+      deviceMetadata: testDeviceMetadata,
+      state: {
+        fanspeed: 3,
+        standby: false,
+      },
+      sensorData: {
+        pm2_5: 1,
+      },
+    });
+
+    device.emit('update', {
+      id: device.id,
+      name: device.name,
+      controlState: {
+        fanspeed: 3,
+        standby: false,
+      },
+      sensorState: {
+        fanspeed: 91,
+        fsp0: 91,
+        pm2_5: 2,
+      },
+      deviceMetadata: testDeviceMetadata,
+      state: {
+        fanspeed: 3,
+        standby: false,
+      },
+      sensorData: {
+        fanspeed: 91,
+        fsp0: 91,
+        pm2_5: 2,
+      },
+    });
+
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(device.sensorState.pm2_5).toBe(2);
+    expect(device.sensorState.fanspeed).toBeUndefined();
+    expect(device.sensorState.fsp0).toBeUndefined();
   });
 });

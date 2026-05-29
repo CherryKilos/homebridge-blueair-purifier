@@ -5,6 +5,7 @@ import { DeviceConfig } from '../platformUtils';
 import { FullBlueAirDeviceState } from '../api/BlueAirAwsApi';
 import {
   brightnessMaxForDevice,
+  clampPercent,
   inferDeviceCapabilities,
   percentToRaw,
   rawToPercent,
@@ -21,12 +22,13 @@ import {
   booleanWriteValue,
   celsiusToBlueairSetpoint,
   clampClimateSetpoint,
-  COMFORT_PURE_DISPLAY_OFF_FLOOR,
   COMFORT_PURE_MAIN_MODE,
   displayBrightnessIsOn,
+  displayBrightnessPercentToRaw,
   displayBrightnessToPercent,
   nearestTimerPresetSeconds,
   numericStateValue,
+  resolveDisplayBrightnessOffFloor,
   timerDurationSeconds,
   timerRemainingSeconds,
 } from '../device/comfortPureControls';
@@ -548,7 +550,7 @@ export class AirPurifierAccessory {
   }
 
   getFilterLifeLevel(): CharacteristicValue {
-    return 100 - (this.device.controlState.filterusage || 0);
+    return clampPercent(100 - (this.device.controlState.filterusage || 0));
   }
 
   getCurrentTemperature(): CharacteristicValue {
@@ -622,7 +624,7 @@ export class AirPurifierAccessory {
       return;
     }
 
-    const rawValue = percentToRaw(Number(value), this.getDisplayBrightnessMax());
+    const rawValue = displayBrightnessPercentToRaw(Number(value), this.getDisplayBrightnessMax(), this.getDisplayBrightnessOffFloor());
     this.platform.log.info(`[${this.device.name}] Setting display brightness: homekit=${value}, key=nmbrightness, raw=${rawValue}`);
     if (rawValue > 0) {
       this.lastDisplayBrightness = rawValue;
@@ -840,7 +842,10 @@ export class AirPurifierAccessory {
   }
 
   private getDisplayBrightnessOffFloor(): number {
-    return this.device.deviceMetadata.adapterId === 'comfort-pure-t10i' ? COMFORT_PURE_DISPLAY_OFF_FLOOR : 0;
+    return resolveDisplayBrightnessOffFloor(
+      this.configDev.displayBrightnessOffFloor,
+      this.device.deviceMetadata.adapterId === 'comfort-pure-t10i',
+    );
   }
 
   private getClimateFanSpeedAttribute(): string {

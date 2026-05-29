@@ -68,6 +68,25 @@ export function displayBrightnessToPercent(value: number | undefined, rawMax: nu
   return Math.min(100, Math.round((value / rawMax) * 100));
 }
 
+export function displayBrightnessPercentToRaw(percentValue: number, rawMax: number, offFloor = 0): number {
+  if (percentValue <= 0 || rawMax <= 0) {
+    return 0;
+  }
+
+  const clampedPercent = Math.min(100, percentValue);
+  const rawValue = Math.max(1, Math.round((clampedPercent / 100) * rawMax));
+  const minimumOnValue = Math.min(rawMax, Math.max(1, offFloor + 1));
+  return Math.min(rawMax, Math.max(minimumOnValue, rawValue));
+}
+
+export function resolveDisplayBrightnessOffFloor(configuredValue: number | undefined, isComfortPure: boolean): number {
+  if (configuredValue !== undefined && configuredValue >= 0) {
+    return configuredValue;
+  }
+
+  return isComfortPure ? COMFORT_PURE_DISPLAY_OFF_FLOOR : 0;
+}
+
 export function blueairTemperatureToCelsius(value: number | undefined): number | undefined {
   if (value === undefined) {
     return undefined;

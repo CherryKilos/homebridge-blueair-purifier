@@ -8,8 +8,15 @@ import type { Logger } from 'homebridge';
 import BlueAirAwsApi, { BlueAirDeviceStatus } from '../src/api/BlueAirAwsApi';
 import BlueAirRealtimeApi, { BlueAirRealtimeUpdate } from '../src/api/BlueAirRealtimeApi';
 import type { BlueAirMqttAuth } from '../src/api/BlueAirMqttTypes';
-import { Config, defaultConfig } from '../src/platformUtils';
+import { Config, DeviceConfig, defaultConfig, defaultDeviceConfig } from '../src/platformUtils';
 import { PLATFORM_NAME } from '../src/settings';
+import {
+  inferDeviceCapabilities,
+  shouldExposeDetectedService,
+  shouldExposeLedService,
+  shouldExposeService,
+} from '../src/device/capabilities';
+import { displayBrightnessIsOn, displayBrightnessToPercent, resolveDisplayBrightnessOffFloor } from '../src/device/comfortPureControls';
 
 type HomebridgeConfig = {
   platforms?: Array<Record<string, unknown>>;
@@ -111,7 +118,9 @@ async function loadPluginConfig(): Promise<Config> {
     throw new Error(`No "${PLATFORM_NAME}" platform config found in ${configPath}`);
   }
 
-  return defaultsDeep({}, pluginConfig, defaultConfig) as Config;
+  const config = defaultsDeep({}, pluginConfig, defaultConfig) as Config;
+  config.devices = (config.devices ?? []).map((device) => defaultsDeep({}, device, defaultDeviceConfig));
+  return config;
 }
 
 function rawShape(value: unknown): Record<string, unknown> {
@@ -135,12 +144,140 @@ function rawShape(value: unknown): Record<string, unknown> {
   };
 }
 
-function adapterStatusSummary(normalizedStatus: BlueAirDeviceStatus[]) {
+function deviceConfigFor(config: Config, device: BlueAirDeviceStatus): DeviceConfig {
+  return config.devices.find((deviceConfig) => deviceConfig.id === device.id) ?? defaultDeviceConfig;
+}
+
+function displayBrightnessSummary(device: BlueAirDeviceStatus, deviceConfig: DeviceConfig) {
+  if (!device.deviceMetadata.displayBrightness) {
+    return undefined;
+  }
+
+  const rawValue = typeof device.controlState.nmbrightness === 'number' ? device.controlState.nmbrightness : undefined;
+  const rawMax =
+    deviceConfig.displayBrightnessMax && deviceConfig.displayBrightnessMax > 0
+      ? deviceConfig.displayBrightnessMax
+      : device.deviceMetadata.displayBrightness.rawMax;
+  const offFloor = resolveDisplayBrightnessOffFloor(
+    deviceConfig.displayBrightnessOffFloor,
+    device.deviceMetadata.adapterId === 'comfort-pure-t10i',
+  );
+
+  return {
+    rawValue,
+    rawMax,
+    offFloor,
+    homeKitOn: displayBrightnessIsOn(rawValue, offFloor),
+    homeKitBrightness: displayBrightnessToPercent(rawValue, rawMax, offFloor),
+  };
+}
+
+function exposedHomeKitServices(device: BlueAirDeviceStatus, deviceConfig: DeviceConfig, config: Config): string[] {
+  const capabilities = inferDeviceCapabilities(device.controlState, device.sensorState);
+  const disabledServices = deviceConfig.disabledServices ?? [];
+  const services = ['AirPurifier', 'FilterMaintenance'];
+
+  if (device.deviceMetadata.fanSpeed) {
+    services.push('AirPurifier.RotationSpeed');
+  }
+  if (capabilities.controls.childLock) {
+    services.push('AirPurifier.LockPhysicalControls');
+  }
+  if (device.deviceMetadata.oscillation && !disabledServices.includes('oscillation')) {
+    services.push('AirPurifier.SwingMode');
+  }
+  if (
+    shouldExposeLedService(
+      deviceConfig.led,
+      capabilities.controls.brightness,
+      Boolean(device.deviceMetadata.displayBrightness),
+      config.autoExposeAvailableServices,
+      disabledServices,
+    )
+  ) {
+    services.push('Lightbulb.Led');
+  }
+  if (device.deviceMetadata.displayBrightness && !disabledServices.includes('displayLight')) {
+    services.push('Lightbulb.Display');
+  }
+  if (
+    shouldExposeDetectedService(
+      'airQuality',
+      deviceConfig.airQualitySensor,
+      capabilities.sensors.airQuality,
+      config.autoExposeAvailableServices,
+      disabledServices,
+    )
+  ) {
+    services.push('AirQualitySensor');
+  }
+  if (
+    shouldExposeDetectedService(
+      'temperature',
+      deviceConfig.temperatureSensor,
+      capabilities.sensors.temperature,
+      config.autoExposeAvailableServices,
+      disabledServices,
+    )
+  ) {
+    services.push('TemperatureSensor');
+  }
+  if (
+    shouldExposeDetectedService(
+      'humidity',
+      deviceConfig.humiditySensor,
+      capabilities.sensors.humidity,
+      config.autoExposeAvailableServices,
+      disabledServices,
+    )
+  ) {
+    services.push('HumiditySensor');
+  }
+  if (
+    shouldExposeService(
+      'germShield',
+      deviceConfig.germShield,
+      capabilities.controls.germShield,
+      config.autoExposeAvailableServices,
+      disabledServices,
+    )
+  ) {
+    services.push('Switch.GermShield');
+  }
+  if (
+    shouldExposeService(
+      'nightMode',
+      deviceConfig.nightMode,
+      capabilities.controls.nightMode,
+      config.autoExposeAvailableServices,
+      disabledServices,
+    )
+  ) {
+    services.push('Switch.NightMode');
+  }
+  if (deviceConfig.sleepTimer && device.deviceMetadata.sleepTimer && !disabledServices.includes('sleepTimer')) {
+    services.push('Valve.SleepTimer');
+  }
+  if (
+    deviceConfig.comfortPureClimateMode === 'gated' &&
+    device.deviceMetadata.climate &&
+    device.sensorState.temperature !== undefined &&
+    !disabledServices.includes('comfortPureClimate')
+  ) {
+    services.push('HeaterCooler.ComfortPureClimate');
+  }
+
+  return services;
+}
+
+function adapterStatusSummary(normalizedStatus: BlueAirDeviceStatus[], config: Config) {
   return normalizedStatus.map((device) => ({
     id: device.id,
     name: device.name,
     controlState: device.controlState,
     sensorState: device.sensorState,
+    displayBrightness: displayBrightnessSummary(device, deviceConfigFor(config, device)),
+    exposedHomeKitServices: exposedHomeKitServices(device, deviceConfigFor(config, device), config),
     adapter: {
       id: device.deviceMetadata.adapterId,
       name: device.deviceMetadata.adapterName,
@@ -256,7 +393,7 @@ async function main() {
     registeredDevices,
     rawInitialState,
     normalizedStatus,
-    adapterStatus: adapterStatusSummary(normalizedStatus),
+    adapterStatus: adapterStatusSummary(normalizedStatus, config),
     mqttAuth,
     realtimeSampleSummary,
     sensorProbeResults,

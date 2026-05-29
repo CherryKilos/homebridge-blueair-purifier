@@ -1,12 +1,19 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.brightnessMaxForDevice = exports.fanSpeedMaxForWritableState = exports.fanSpeedMaxForDevice = exports.temperatureToCelsius = exports.percentToRaw = exports.rawToPercent = exports.resolveBrightnessMax = exports.resolveFanSpeedMax = exports.shouldExposeLedService = exports.shouldExposeDetectedService = exports.shouldExposeService = exports.inferDeviceCapabilities = void 0;
+exports.brightnessMaxForDevice = exports.fanSpeedMaxForWritableState = exports.fanSpeedMaxForDevice = exports.temperatureToCelsius = exports.percentToRaw = exports.rawToPercent = exports.resolveBrightnessMax = exports.resolveFanSpeedMax = exports.shouldExposeLedService = exports.shouldExposeDetectedService = exports.shouldExposeService = exports.inferDeviceCapabilities = exports.clampPercent = void 0;
 const DEFAULT_FAN_SPEED_MAX = 3;
 const LOW_RANGE_BRIGHTNESS_MAX = 10;
 const PERCENT_MAX = 100;
 function hasValue(value) {
     return value !== undefined;
 }
+function clampPercent(value) {
+    if (!Number.isFinite(value)) {
+        return 0;
+    }
+    return Math.min(PERCENT_MAX, Math.max(0, Math.round(value)));
+}
+exports.clampPercent = clampPercent;
 function inferDeviceCapabilities(state, sensorData) {
     const hasPm2_5 = hasValue(sensorData.pm2_5);
     const hasPm10 = hasValue(sensorData.pm10);
@@ -87,7 +94,7 @@ function rawToPercent(rawValue, rawMax) {
     if (!rawValue || rawValue <= 0 || rawMax <= 0) {
         return 0;
     }
-    return Math.min(PERCENT_MAX, Math.round((rawValue / rawMax) * PERCENT_MAX));
+    return clampPercent((rawValue / rawMax) * PERCENT_MAX);
 }
 exports.rawToPercent = rawToPercent;
 function percentToRaw(percentValue, rawMax) {

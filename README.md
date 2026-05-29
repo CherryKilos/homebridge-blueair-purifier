@@ -1,74 +1,104 @@
-<p align="center">
-  <a href="https://github.com/homebridge/verified/blob/master/verified-plugins.json"><img alt="Homebridge Verified" src="./branding/Homebridge_x_Blueair.svg" width="500px"></a>
-</p>
+# Homebridge Blueair Personal Fork
 
-# homebridge-blueair-purifier
+Personal Homebridge fork for:
 
-[![verified-by-homebridge](https://badgen.net/badge/homebridge/verified/purple)](https://github.com/homebridge/homebridge/wiki/Verified-Plugins)
-[![npm](https://badgen.net/npm/v/homebridge-blueair-purifier)](https://www.npmjs.com/package/homebridge-blueair-purifier)
-[![npm](https://badgen.net/npm/dt/homebridge-blueair-purifier?label=downloads)](https://www.npmjs.com/package/homebridge-blueair-purifier)
+- ComfortPure 3-in-1 T10i
+- Blue Pure 211i Max
+- Blue Pure 311i+ Max
 
-## Installation
+This fork keeps Blueair REST writes as the only control path and uses Blueair MQTT realtime data only for read-only sensors.
 
-**Option 1: Install via Homebridge Config UI X:**
+## Install On Homebridge
 
-Search for "Blueair Purifier" in in [homebridge-config-ui-x](https://github.com/oznu/homebridge-config-ui-x) and install `homebridge-blueair-purifier`.
+Commit and push local changes to GitHub, then run this on the Homebridge server:
 
-**Option 2: Manually Install:**
+```bash
+cd /var/lib/homebridge
 
-```text
-sudo npm install -g homebridge-blueair-purifier
+sudo hb-service stop
+
+sudo -u homebridge env "PATH=/opt/homebridge/bin:$PATH" HOME=/var/lib/homebridge \
+  /opt/homebridge/bin/npm cache clean --force
+
+sudo rm -rf /var/lib/homebridge/node_modules/homebridge-blueair-purifier
+
+sudo -u homebridge env "PATH=/opt/homebridge/bin:$PATH" HOME=/var/lib/homebridge \
+  /opt/homebridge/bin/npm install --prefix /var/lib/homebridge --omit=dev --force \
+  https://codeload.github.com/CherryKilos/homebridge-blueair-purifier/tar.gz/refs/heads/main
+
+sudo test -f /var/lib/homebridge/node_modules/homebridge-blueair-purifier/dist/index.js && echo "Blueair installed"
+
+sudo hb-service restart
 ```
 
-## Supported Devices
+Check logs:
 
-This plugin only supports WiFi connected BlueAir purifiers utilizing cloud connectivity (via AWS) for device communication. Below is a list of known tested products.
+```bash
+sudo hb-service logs | grep -iE "blueair|error|failed"
+```
 
-| Device | Product Page |
-|----------------|------------|
-| Blue Pure 211i Max | [link](https://www.blueair.com/us/air-purifiers/blue-pure-211i-max/3541.html?cgid=air-purifiers) |
-| Blue Pure 311i+ Max | [link](https://www.blueair.com/us/air-purifiers/blue-pure-311i-plus-max/3540.html?cgid=air-purifiers) |
-| Blue Pure 311i Max | [link](https://www.blueair.com/us/air-purifiers/blue-pure-311i-max/3539.html?cgid=air-purifiers) |
-| Blue Pure 411i Max | [link](https://www.blueair.com/us/air-purifiers/blue-pure-411i-max/3538.html?cgid=air-purifiers) |
-| Blue Pure 511i Max | [link](https://www.blueair.com/us/air-purifiers/blue-pure-511i-max/3710.html) |
-| Protect 7470i | [link](https://www.blueair.com/us/air-purifiers/2954.html?cgid=air-purifiers) |
-| DustMagnet™ 5440i | [link](https://www.blueair.com/us/air-purifiers/dustmagnet-5440i/2420.html?cgid=air-purifiers) |
+## HomeKit Mapping
 
-### Features
+- Power: HomeKit `AirPurifier.Active`, Blueair `standby`.
+- Fan speed:
+  - Blue Pure Max devices write `fanspeed` on a `0-91` raw scale.
+  - ComfortPure writes `fsp0` using the T10i steps `11 / 37 / 64 / 91`.
+- Oscillation: HomeKit `SwingMode`, Blueair `osc` only.
+- Display lock: HomeKit `LockPhysicalControls`, Blueair `childlock`.
+- ComfortPure display brightness: separate `Display` Lightbulb, Blueair `nmbrightness`.
+- Sensors: temperature, humidity, PM, and VOC are read-only. ComfortPure temperature/humidity come from realtime MQTT when available.
+- Climate: optional gated `HeaterCooler`, disabled by default.
+- Sleep timer: disabled by default because HomeKit renders it as a valve/faucet.
 
-- **Simple Login Mechanism** - all you need is your username and password to get started.
-- **Semi-automatic detection and configuration of multiple BlueAir devices.**
-- **Fast response times** - the plugin uses the BlueAir API to communicate with the devices.
+## Useful Config
 
->[!NOTE]
->**Air quality readings** - the plugin may not always report the correct air quality readings (like PM 2.5) due to the BlueAir API limitations. The solution for this issue is in progress.
+```json
+{
+  "realtimeSensors": "auto",
+  "sensorDiagnostics": false,
+  "devices": [
+    {
+      "name": "ComfortPure",
+      "comfortPureClimateMode": "off",
+      "displayBrightnessMax": 100,
+      "displayBrightnessOffFloor": 7,
+      "sleepTimer": false,
+      "disabledServices": []
+    }
+  ]
+}
+```
 
-## Plugin Configuration
+Leave `displayBrightnessOffFloor` blank for automatic behavior. ComfortPure defaults to `7`; other devices default to `0`.
 
-### Feature Toggles
-* Show LED service as a lightbulb
-* Show Air Quality Sensor service
-* Show Temperature Sensor service
-* Show Germ Shield switch service
-* Show Night Mode switch service
+## Diagnostics
 
-### Customizable Options
-* Adjustable Filter Change Level
-* Device Name
-* Verbose Logging
-* BlueAir Server Region Selection
+Run a redacted capture from the installed plugin directory:
 
-### Supported Devices / Features
-| Device                                                   | Air Purifier | LED Status Switch |    PM 2.5    | Temp. Sensor | Humidity Sensor | Night Mode | Germ Shield |
-|----------------------------------------------------------|:------------:|:-----------------:|:------------:|:------------:|:---------------:|:----------:|:-----------:|
-| DustMagnet                                               |      Y       |         Y         |      Y       |      N       |        N        |     Y      |      N      |
-| HealthProtect                                            |      Y       |         Y         |      Y       |      Y       |        N        |     Y      |      Y      |
-| Blue Pure                                                |      Y       |         Y         |      Y       |      N       |        N        |     Y      |      N      |
+```bash
+cd /var/lib/homebridge/node_modules/homebridge-blueair-purifier
 
-## Credits
-Inspired by the work of [@fsj21](https://github.com/fjs21) on the Amazon Web Services (AWS) API and construction of the documentation.
+sudo -u homebridge env "PATH=/opt/homebridge/bin:$PATH" HOME=/var/lib/homebridge BLUEAIR_CONFIG=/var/lib/homebridge/config.json \
+  /opt/homebridge/bin/npm run capture:blueair
+```
 
-### Trademarks
+Personal captures are written under `fixtures/personal/` and should stay out of git.
 
-Apple and HomeKit are registered trademarks of Apple Inc.
-BlueAir is a trademark of Unilever Corporation
+Enable `sensorDiagnostics: true` only while troubleshooting. It logs declared realtime sensor slugs and first payload shapes.
+
+## Troubleshooting
+
+- Plugin missing in the Homebridge UI: install into `/var/lib/homebridge/node_modules`, not only the global npm root.
+- `sudo npm: command not found`: use `/opt/homebridge/bin/npm` with `PATH=/opt/homebridge/bin:$PATH`.
+- Stale HomeKit tiles: restart the Blueair child bridge after reinstall. If a removed service still appears, remove the cached accessory from Homebridge UI only after confirming the plugin is installed correctly.
+- ComfortPure display shows `7%` when off: reinstall this fork version; raw `nmbrightness <= 7` is treated as off.
+- ComfortPure temperature missing: wait for realtime MQTT data or run `capture:blueair`; this fork does not fake ambient temperature from `heattemp`.
+
+## Local Validation
+
+```bash
+npm test
+npm run lint
+npm run build
+npm pack --dry-run
+```

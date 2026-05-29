@@ -14,6 +14,8 @@ export declare function timerDurationSeconds(state: BlueAirDeviceState): number;
 export declare function timerRemainingSeconds(state: BlueAirDeviceState, nowSeconds?: number): number;
 export declare function displayBrightnessIsOn(value: number | undefined, offFloor?: number): boolean;
 export declare function displayBrightnessToPercent(value: number | undefined, rawMax: number, offFloor?: number): number;
+export declare function displayBrightnessPercentToRaw(percentValue: number, rawMax: number, offFloor?: number): number;
+export declare function resolveDisplayBrightnessOffFloor(configuredValue: number | undefined, isComfortPure: boolean): number;
 export declare function blueairTemperatureToCelsius(value: number | undefined): number | undefined;
 export declare function celsiusToBlueairSetpoint(value: number): number;
 export declare function clampClimateSetpoint(value: number): number;
